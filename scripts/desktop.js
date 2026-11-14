@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -138,7 +138,7 @@ async function smoke(archive) {
   delete env.NODE_OPTIONS;
   const invoke = (command, args) => execFileSync(command, args, { cwd: temporary, env, windowsHide: true, encoding: 'utf8', timeout: 15000 });
   try {
-    const { version: actual } = JSON.parse(invoke(bundledNode, [entry, '--version', '--json']));
+    const { version: actual, build } = JSON.parse(invoke(bundledNode, [entry, '--version', '--json']));
     if (actual !== version) throw new Error('The desktop archive returned an unexpected FolderDrop version.');
     const child = spawn(launcherPath, ['--no-open', '--json'], { cwd: temporary, env, windowsHide: true, stdio: 'ignore' });
     const launcherExit = new Promise((resolve, reject) => {
@@ -153,10 +153,25 @@ async function smoke(archive) {
     const launch = JSON.parse(invoke(bundledNode, [entry, '--no-open', '--json']));
     const { origin, hash } = new URL(launch.url);
     const page = await fetch(origin, { signal: AbortSignal.timeout(5000) });
-    if (!page.ok || !(await page.text()).includes('FolderDrop')) throw new Error('The launcher did not start the FolderDrop workspace.');
+    if (!page.ok || !(await page.text()).includes(`v${version} · build ${build}`)) {
+      throw new Error('The launcher did not start a workspace for this build.');
+    }
     const authenticated = await fetch(`${origin}/bootstrap`, { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-FolderDrop-Action': '1' }, body: JSON.stringify({ key: hash.slice(1) }) });
     if (!authenticated.ok) throw new Error('The desktop workspace could not redeem its launch key.');
+    if (windows) {
+      const metadataFile = path.join(state, 'runtime.json');
+      const metadata = await fs.readFile(metadataFile, 'utf8');
+      await fs.writeFile(metadataFile, JSON.stringify({ ...JSON.parse(metadata), build: undefined }));
+      try {
+        const mismatch = spawnSync(bundledNode, [entry, '--no-open', '--json'], {
+          cwd: temporary, env: { ...env, FOLDERDROP_DESKTOP_BUILD_CHECK: '1' }, windowsHide: true, encoding: 'utf8', timeout: 15000
+        });
+        if (mismatch.status !== 4 || JSON.parse(mismatch.stdout).code !== 'build_mismatch') {
+          throw new Error('The Windows package did not detect a different running build.');
+        }
+      } finally { await fs.writeFile(metadataFile, metadata); }
+    }
     console.log(`Verified the desktop launcher, bundled Node, and workspace authentication for ${target}.`);
   } finally {
     invoke(bundledNode, [entry, 'shutdown', '--json']);

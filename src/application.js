@@ -5,13 +5,14 @@ import QRCode from 'qrcode';
 import { Store } from './store.js';
 import { Deliveries } from './deliveries.js';
 import { Uploads } from './uploads.js';
-import { Network } from './network.js';
+import { Network, webReceiverLink } from './network.js';
 import { recipientHandler } from './recipient.js';
 import { inspectFolder, scan } from './files.js';
 import { installTunnel, tunnelVersion } from './tunnel.js';
 import { check, Problem } from './errors.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Receiver } from './receiver.js';
+import { BUILD, VERSION } from './version.js';
 
 export class Application {
   constructor(directory) {
@@ -47,7 +48,7 @@ export class Application {
   }
 
   async diagnostics() {
-    return { node: process.version, platform: process.platform, architecture: process.arch,
+    return { version: VERSION, build: BUILD, node: process.version, platform: process.platform, architecture: process.arch,
       dataDirectory: this.store.directory, tunnel: await tunnelVersion(this.store.directory),
       modes: ['local', 'lan', 'public', 'self-hosted'], preview: ['image', 'text', 'pdf', 'audio', 'video'], externalModel: false };
   }
@@ -80,8 +81,8 @@ export class Application {
         const share = this.deliveries.get(id);
         const record = this.deliveries.recipient(share, recipient);
         const receiverLinks = record.encryption && share.network?.receiverUrl ?
-          links.map(link => `${share.network.receiverUrl}#${new URLSearchParams({ delivery: link })}`) : [];
-        const address = receiverLinks[0] ?? links[0];
+          links.map(link => webReceiverLink(share.network.receiverUrl, link)) : [];
+        const address = record.encryption ? receiverLinks[0] : links[0];
         return { links, receiverLinks, qr: address ? await QRCode.toDataURL(address, { width: 256, margin: 2 }) : null };
       }
       case 'start':

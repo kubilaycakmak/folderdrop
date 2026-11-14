@@ -7,6 +7,7 @@ const select = id => document.getElementById(id);
 const form = select('receive');
 const { delivery, code, key } = form.elements;
 const submit = select('decrypt');
+const check = select('check-connection');
 const cancel = select('cancel');
 const progress = select('progress');
 const status = select('status');
@@ -16,9 +17,25 @@ let transfer;
 let session;
 let savedUrl;
 
-delivery.value = new URLSearchParams(location.hash.slice(1)).get('delivery')?.slice(0, 512) ?? '';
-if (location.hash) history.replaceState(null, '', location.pathname);
-submit.disabled = location.protocol !== 'https:';
+const offline = 'Could not reach this delivery. Ask the sender for the latest phone link and confirm the sender dashboard shows Phone links enabled.';
+const secure = location.protocol === 'https:';
+const fillFromLink = () => {
+  if (!location.hash) return;
+  const value = new URLSearchParams(location.hash.slice(1)).get('delivery');
+  history.replaceState(null, '', location.pathname + location.search);
+  if (value === null) return;
+  transfer?.abort();
+  session = undefined;
+  clearSave();
+  delivery.value = value.slice(0, 512);
+  code.value = '';
+  key.value = '';
+  status.textContent = '';
+  error.hidden = true;
+};
+fillFromLink();
+window.addEventListener('hashchange', fillFromLink);
+submit.disabled = check.disabled = !secure;
 if (submit.disabled) showError('Open this trusted receiver over HTTPS.');
 
 function showError(message) {
@@ -121,10 +138,30 @@ async function receive(link, token, privateKey, signal) {
 
 cancel.onclick = () => transfer?.abort();
 delivery.oninput = () => { session = undefined; clearSave(); };
+check.onclick = async () => {
+  check.disabled = submit.disabled = true;
+  error.hidden = true;
+  status.textContent = 'Checking the delivery connection…';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const link = deliveryUrl(delivery.value.trim());
+    const response = await fetch(`${link}/encrypted`, { ...options, signal: controller.signal });
+    await response.body?.cancel();
+    if (response.status !== 401) throw new Error(denied(response));
+    status.textContent = 'Connected. The one-time code is still required to open the delivery.';
+  } catch (failure) {
+    status.textContent = '';
+    showError(controller.signal.aborted || failure instanceof TypeError ? offline : failure.message);
+  } finally {
+    clearTimeout(timer);
+    check.disabled = submit.disabled = false;
+  }
+};
 form.onsubmit = async event => {
   event.preventDefault();
   if (submit.disabled) return;
-  submit.disabled = true;
+  submit.disabled = check.disabled = true;
   cancel.hidden = false;
   error.hidden = true;
   clearSave();
@@ -159,13 +196,13 @@ form.onsubmit = async event => {
   } catch (failure) {
     status.textContent = '';
     failed = signal.aborted ? 'Download cancelled. You can retry in this tab.' :
-      failure instanceof TypeError ? 'Could not connect. Check that the sender is still sharing and has enabled this web receiver.' : failure.message;
+      failure instanceof TypeError ? offline : failure.message;
   } finally {
     transfer.abort();
     transfer = undefined;
     progress.hidden = true;
     cancel.hidden = true;
-    submit.disabled = false;
+    submit.disabled = check.disabled = false;
     if (failed) showError(failed);
   }
 };

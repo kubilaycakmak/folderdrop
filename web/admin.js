@@ -2,6 +2,7 @@ import { $, $$, api, basename, busy, bytes, confirmAction, date, escape as e, ic
 
 const main = $('#main');
 const steps = ['Choose files', 'Presentation', 'Access & lifetime', 'Preview & share'];
+const hostedReceiver = 'https://folderdrop-receiver.netlify.app/';
 const call = (action, input = {}) => api('/api/action', { action, input });
 let records = [];
 let delivery;
@@ -292,8 +293,10 @@ function share() {
     <label id="host-field" hidden>Interface address<input id="host" placeholder="0.0.0.0"></label>
     <label id="port-field" hidden>Listener port<input type="number" id="port" min="1" max="65535" placeholder="Automatic"></label>
     <label class="full" id="external-field" hidden>External HTTPS origin<input type="url" id="external" placeholder="https://deliveries.example.com"></label>
-    <label class="full" id="receiver-field" hidden>Trusted web receiver (optional)<input type="url" id="receiver-url" maxlength="512"
-    placeholder="https://receive.example.com/" aria-describedby="receiver-help"><small id="receiver-help" class="muted">Use an HTTPS site you trust to serve the FolderDrop web receiver. Send that address directly to phone users.</small></label>
+    <div class="full form-stack" id="receiver-field" hidden><label for="receiver-url">Trusted web receiver (optional)</label>
+    <input type="url" id="receiver-url" maxlength="512" placeholder="https://receive.example.com/" aria-describedby="receiver-help">
+    <small id="receiver-help" class="muted">This HTTPS receiver handles decryption in the browser. Leave the field blank for desktop-only receiving.</small>
+    <div class="row"><button type="button" class="button" id="use-hosted-receiver">Use FolderDrop web receiver</button></div></div>
     <label class="check-line full" id="public-field" hidden><input id="confirm-public" type="checkbox"> Start an internet-facing Cloudflare tunnel for this delivery.</label>
     <div class="full row wrap" id="provider-field" hidden><span class="muted" id="provider-status" role="status"></span>
     <button type="button" class="button" id="install-provider" hidden>Install verified Cloudflare connector</button></div>
@@ -314,11 +317,15 @@ function bindShare() {
   const id = delivery.id;
   const update = () => {
     const connection = delivery.connection;
+    const network = delivery.network;
+    const mobile = delivery.enabled && ['public', 'self-hosted'].includes(network?.mode) ?
+      (network.receiverUrl ? `<p>Phone links enabled for <code>${e(new URL(network.receiverUrl).host)}</code>.</p>` :
+        '<p class="callout">Phone links are off. Stop sharing and set a trusted web receiver to let recipients open encrypted deliveries on a phone.</p>') : '';
     $('#connection-tag').textContent = state(delivery);
     $('#connection-info').innerHTML = `<p class="muted">${e(connection.message ?? (delivery.enabled ?
       (connection.reachability === 'origin_probe_ok' ? 'The external address reached this listener from this computer.' :
       (delivery.network.mode === 'local' ? 'Available on this computer while FolderDrop runs.' : 'Keep this computer online. External reachability is unverified.')) :
-      'This delivery is currently offline.'))}</p>${connection.upstream ? `<p>Reverse proxy upstream <code>${e(connection.upstream)}</code></p>` : ''}`;
+      'This delivery is currently offline.'))}</p>${mobile}${connection.upstream ? `<p>Reverse proxy upstream <code>${e(connection.upstream)}</code></p>` : ''}`;
     $('#transfers').innerHTML = delivery.transfers?.length ? delivery.transfers.map(task => `<div class="transfer-row">
       <strong>${e(task.kind)}</strong><progress aria-label="${e(task.kind)} progress" ${task.total ? `max="${task.total}" value="${task.bytes}"` : ''}></progress>
       <span>${bytes(task.bytes)}${task.total ? ` / ${bytes(task.total)}` : ''}</span></div>`).join('') : '<p class="muted">No transfers in progress.</p>';
@@ -331,7 +338,13 @@ function bindShare() {
     $('#host').value = delivery.network?.host ?? '';
     $('#port').value = delivery.network?.port || '';
     $('#external').value = delivery.network?.external ?? '';
-    $('#receiver-url').value = delivery.network?.receiverUrl ?? '';
+    const receiver = $('#receiver-url');
+    const receiverByMode = {
+      public: mode.value === 'public' ? delivery.network.receiverUrl || hostedReceiver : hostedReceiver,
+      'self-hosted': mode.value === 'self-hosted' ? delivery.network.receiverUrl ?? '' : ''
+    };
+    let previousMode;
+    $('#use-hosted-receiver').onclick = () => { receiver.value = hostedReceiver; receiver.focus(); };
     const install = $('#install-provider');
     const providerStatus = $('#provider-status');
     async function provider() {
@@ -350,6 +363,9 @@ function bindShare() {
       }
     }, $('#form-error'));
     function modeChanged() {
+      if (previousMode) receiverByMode[previousMode] = receiver.value;
+      receiver.value = receiverByMode[mode.value] ?? '';
+      previousMode = mode.value;
       const binding = ['lan', 'self-hosted'].includes(mode.value);
       $('#host-field').hidden = !binding;
       $('#port-field').hidden = !binding;
@@ -374,7 +390,7 @@ function bindShare() {
       event.preventDefault();
       return busy($('#start-sharing'), async () => {
         await call('start', { id, mode: mode.value, host: $('#host').value.trim(), port: $('#port').valueAsNumber || undefined,
-          external: $('#external').value.trim(), receiverUrl: $('#receiver-field').hidden ? undefined : $('#receiver-url').value.trim(),
+          external: $('#external').value.trim(), receiverUrl: $('#receiver-field').hidden ? undefined : receiver.value.trim(),
           confirmPublic: $('#confirm-public').checked });
         await reload();
       }, $('#form-error'));
@@ -400,11 +416,19 @@ function bindShare() {
   profiles();
   versions();
   clearInterval(timer);
+  let polling = false;
   timer = setInterval(async () => {
-    if (step !== 3 || delivery?.id !== id || document.hidden) return;
+    if (polling || step !== 3 || delivery?.id !== id || document.hidden) return;
+    const currentTimer = timer;
+    polling = true;
     try {
       const fresh = await call('connection', { id });
-      if (step !== 3 || delivery?.id !== id) return;
+      if (currentTimer !== timer || step !== 3 || delivery?.id !== id) return;
+      if (fresh.connection.addresses.join('\n') !== delivery.connection.addresses.join('\n')) {
+        const dialog = $('#dialog');
+        const links = $('#recipient-links', dialog);
+        if (dialog.open && links?.dataset.delivery === id) links.dispatchEvent(new Event('connectionchange'));
+      }
       if (fresh.connection.connection === 'closed' && delivery.connection.connection !== 'closed') {
         await reload();
         return;
@@ -412,7 +436,7 @@ function bindShare() {
       delivery.connection = fresh.connection;
       delivery.transfers = fresh.transfers;
       update();
-    } catch {}
+    } catch {} finally { polling = false; }
   }, 1800);
 }
 
@@ -443,30 +467,60 @@ function profiles() {
   for (const node of $$('[data-links]', area)) node.onclick = () => void busy(node, () => credentials(node.dataset.links));
 }
 
-async function credentials(recipient, code, decryptionKey) {
-  const data = await call('links', { id: delivery.id, recipient });
+function recipientLinksMarkup(data, mode) {
+  if (!data.links.length) {
+    return '<p role="status" class="muted">No current recipient address. Start sharing or wait for the connection to come online.</p>';
+  }
   const mobile = data.receiverLinks?.[0];
-  const local = data.links.length && delivery.network?.mode === 'local';
+  const qr = data.qr ? `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` : '';
+  return `${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
+    <div class="row wrap"><a class="button primary" href="${e(mobile)}" target="_blank" rel="noreferrer">Open in phone browser</a>
+    <button class="button" data-copy="#phone-link">Copy phone link</button></div>
+    <a class="phone-qr" href="${e(mobile)}" target="_blank" rel="noreferrer">${qr}<span>Scan to open ${e(new URL(mobile).host)}</span></a>` :
+    qr || '<p class="callout">This encrypted link is desktop only. To generate a phone QR, restart sharing with a trusted web receiver.</p>'}
+    ${mode === 'local' ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
+    ${data.links.map((link, index) => `<label>${mobile ? 'Desktop receiver address' : 'Recipient link'}${data.links.length > 1 ? ` ${index + 1}` : ''}
+      <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">${mobile ? 'Copy desktop address' : 'Copy link'}</button>`).join('')}`;
+}
+
+async function credentials(recipient, code, decryptionKey) {
+  const id = delivery.id;
+  const mode = delivery.network?.mode;
   const dialog = modal(code ? 'One-time access code' : 'Recipient link & QR', `<div class="form-stack">
     ${code ? `<p>Copy these credentials now. FolderDrop only shows them when they are issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
     <button class="button" data-copy="#access-code">Copy code</button>` : ''}
     ${decryptionKey ? `<label>Decryption key<input readonly id="decryption-key" value="${e(decryptionKey)}"></label>
     <button class="button" data-copy="#decryption-key">Copy decryption key</button>
     <p class="callout">Send the key separately through a trusted channel. Recipients enter it in a trusted web receiver or in their installed FolderDrop workspace.</p>` : ''}
-    ${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
-    <button class="button" data-copy="#phone-link">Copy phone link</button>` : ''}
-    ${local ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
-    ${data.links.length ? data.links.map((link, index) => `<label>Recipient link${data.links.length > 1 ? ` ${index + 1}` : ''}
-      <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">Copy link</button>`).join('') +
-      `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` :
-      '<p class="muted">Start sharing or wait for the connection to come online, then open Link & QR.</p>'}</div>`);
-  for (const node of $$('[data-copy]', dialog)) node.onclick = () => void busy(node, async () => {
-    const input = $(node.dataset.copy, dialog);
-    input.select();
-    if (navigator.clipboard) await navigator.clipboard.writeText(input.value);
-    else if (!document.execCommand('copy')) throw new Error('Copy the selected text with your keyboard.');
-    toast('Copied.');
+    <div class="form-stack" id="recipient-links" data-delivery="${e(id)}"></div></div>`);
+  const links = $('#recipient-links', dialog);
+  let request = 0;
+  async function refreshLinks() {
+    const active = ++request;
+    const current = () => active === request && dialog.open && links.isConnected;
+    links.innerHTML = '<p role="status" class="muted">Loading recipient links…</p>';
+    try {
+      const data = await call('links', { id, recipient });
+      if (current()) links.innerHTML = recipientLinksMarkup(data, mode);
+    } catch (error) {
+      if (current()) links.innerHTML = `<p role="alert" class="error">${e(error.message)}</p>
+        <button type="button" class="button" data-retry-links>Retry loading links</button>`;
+    }
+  }
+  links.addEventListener('connectionchange', () => void refreshLinks());
+  links.parentElement.addEventListener('click', event => {
+    if (event.target.closest('[data-retry-links]')) { void refreshLinks(); return; }
+    const node = event.target.closest('[data-copy]');
+    if (!node) return;
+    void busy(node, async () => {
+      const input = $(node.dataset.copy, dialog);
+      input.select();
+      if (navigator.clipboard) await navigator.clipboard.writeText(input.value);
+      else if (!document.execCommand('copy')) throw new Error('Copy the selected text with your keyboard.');
+      toast('Copied.');
+    });
   });
+  await refreshLinks();
 }
 
 function profileForm(existing) {
@@ -626,7 +680,8 @@ $('#quit').onclick = event => void busy(event.currentTarget, async () => {
 });
 $('#diagnostics').onclick = event => void busy(event.currentTarget, async () => {
   const info = await call('diagnostics');
-  modal('Diagnostics', `<dl class="diagnostics"><dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
+  modal('Diagnostics', `<dl class="diagnostics"><dt>Version</dt><dd>v${e(info.version)} · build ${e(info.build)}</dd>
+    <dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
     <dt>Data directory</dt><dd><code>${e(info.dataDirectory)}</code></dd>
     <dt>Cloudflare provider</dt><dd>${e(info.tunnel.version ?? info.tunnel.message)}</dd></dl>`);
 });

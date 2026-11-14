@@ -6,8 +6,10 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream';
+import QRCode from 'qrcode';
 import selfsigned from 'selfsigned';
 import { serve } from '../../src/daemon.js';
+import { BUILD, VERSION } from '../../src/version.js';
 import { zipContents } from '../helpers.js';
 
 async function listen(server) {
@@ -20,6 +22,7 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
   let service;
   const servers = [];
   let phone;
+  let admin;
   try {
     const assets = path.join(temporary, 'receiver');
     const source = path.join(temporary, 'source');
@@ -33,7 +36,7 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const receiver = https.createServer(cert, async (req, res) => {
       const names = { '/': ['index.html', 'text/html'], '/receiver.js': ['receiver.js', 'text/javascript'],
         '/receiver.css': ['receiver.css', 'text/css'] };
-      const file = names[req.url];
+      const file = names[new URL(req.url, 'https://receiver.invalid').pathname];
       if (!file) return res.writeHead(404).end();
       res.writeHead(200, { 'Content-Type': file[1] }).end(await fs.readFile(path.join(assets, file[0])));
     });
@@ -60,23 +63,71 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const temporaryListener = await app.call('start', { id: share.id, mode: 'local' });
     const port = Number(new URL(temporaryListener.connection.addresses[0]).port);
     await app.call('stop', { id: share.id });
-    const listening = await app.call('start', { id: share.id, mode: 'self-hosted', external: publicAddress, port, receiverUrl: trusted });
-    upstream = listening.connection.upstream;
-    const issued = await app.call('issue', { id: share.id, encrypted: true, limit: 1 });
-    const { receiverLinks } = await app.call('links', { id: share.id, recipient: issued.id });
+    admin = await browser.newPage();
+    await admin.goto(service.admin.launch().url);
+    await expect(admin.locator('#workspace-build')).toHaveText(`v${VERSION} · build ${BUILD}`);
+    const receiverField = admin.getByLabel('Trusted web receiver (optional)', { exact: true });
+    await admin.getByLabel('Network mode').selectOption('public');
+    await expect(receiverField).toHaveValue('https://folderdrop-receiver.netlify.app/');
+    await admin.getByLabel('Network mode').selectOption('self-hosted');
+    await admin.getByLabel('External HTTPS origin').fill(publicAddress);
+    await admin.getByLabel('Listener port').fill(String(port));
+    await admin.getByRole('button', { name: 'Use FolderDrop web receiver' }).click();
+    await expect(receiverField).toHaveValue('https://folderdrop-receiver.netlify.app/');
+    await receiverField.fill(trusted);
+    await admin.getByRole('button', { name: 'Start proxy listener' }).click();
+    await expect(admin.getByText('Phone links enabled for')).toBeVisible();
+    upstream = (await app.call('inspect', { id: share.id })).connection.upstream;
+    await admin.getByRole('button', { name: 'Issue access code' }).click();
+    await admin.getByLabel('Recipient name').fill('Phone demo');
+    await admin.getByLabel('End-to-end encrypted ZIP').check();
+    await admin.getByRole('button', { name: 'Generate code' }).click();
+    const dialog = admin.getByRole('dialog');
+    const code = dialog.getByRole('textbox', { name: 'One-time access code' });
+    const key = dialog.getByLabel('Decryption key', { exact: true });
+    await expect(code).toBeVisible();
+    const { recipients } = await app.call('inspect', { id: share.id });
+    const [profile] = recipients;
+    const { links, receiverLinks } = await app.call('links', { id: share.id, recipient: profile.id });
+    const issued = { links, id: profile.id, code: await code.inputValue(), decryptionKey: await key.inputValue() };
     expect(new URL(receiverLinks[0]).origin).toBe(trusted);
     expect(receiverLinks[0]).not.toContain(issued.code);
     expect(receiverLinks[0]).not.toContain(issued.decryptionKey);
+    await expect(dialog.getByLabel('Phone or browser link')).toHaveValue(receiverLinks[0]);
+    await expect(dialog.getByRole('link', { name: 'Open in phone browser' })).toHaveAttribute('href', receiverLinks[0]);
+    await expect(dialog.getByRole('link', { name: /Scan to open/ })).toHaveAttribute('href', receiverLinks[0]);
+    await expect(dialog.getByRole('img', { name: 'QR code for the phone or browser link' })).toHaveAttribute('src',
+      await QRCode.toDataURL(receiverLinks[0], { width: 256, margin: 2 }));
+    const listener = app.network.active.get(share.id);
+    const ready = listener.status;
+    listener.status = { ...ready, connection: 'reconnecting', addresses: [] };
+    await expect(dialog.getByRole('status')).toContainText('No current recipient address');
+    await expect(dialog.getByRole('img', { name: /QR code/ })).toHaveCount(0);
+    const moved = 'https://replacement.example';
+    listener.status = { ...ready, addresses: [moved] };
+    const movedLink = `${trusted}/#${new URLSearchParams({ delivery: moved + new URL(issued.links[0]).pathname })}`;
+    await expect(dialog.getByRole('link', { name: /Scan to open/ })).toHaveAttribute('href', movedLink);
+    await expect(dialog.getByRole('img', { name: /QR code/ })).toHaveAttribute('src',
+      await QRCode.toDataURL(movedLink, { width: 256, margin: 2 }));
+    await expect(code).toHaveValue(issued.code);
+    await expect(key).toHaveValue(issued.decryptionKey);
+    listener.status = ready;
+    await expect(dialog.getByLabel('Phone or browser link')).toHaveValue(receiverLinks[0]);
     phone = await browser.newContext({
       ...devices[browserName === 'webkit' ? 'iPhone 15' : 'Pixel 7'],
       ignoreHTTPSErrors: true, acceptDownloads: true
     });
     const page = await phone.newPage();
-    await page.goto(receiverLinks[0]);
+    const [link] = issued.links;
+    await page.goto(link);
+    await expect(page.locator('input, script')).toHaveCount(0);
+    const openReceiver = page.getByRole('link', { name: 'Open in phone browser' });
+    await expect(openReceiver).toHaveAttribute('href', receiverLinks[0]);
+    await openReceiver.click();
     await expect(page.getByLabel('Delivery link')).toHaveValue(issued.links[0]);
     await expect(page.getByRole('heading', { name: 'Receive encrypted files' })).toBeVisible();
+    await expect(page.locator('#receiver-build')).toHaveText(/^v[\d.]+ · build [a-f\d]{10}$/);
     expect(new URL(page.url()).hash).toBe('');
-    const [link] = issued.links;
     const ok = await page.request.fetch(link + '/redeem', { method: 'OPTIONS',
       headers: { Origin: trusted, 'Access-Control-Request-Method': 'POST' } });
     expect(ok.status()).toBe(204);
@@ -87,6 +138,9 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     expect(refused.headers()['access-control-allow-origin']).toBeUndefined();
     const unopened = await page.request.get(link + '/encrypted', { headers: { Origin: trusted } });
     expect(unopened.status()).toBe(401);
+    await page.getByRole('button', { name: 'Check connection' }).click();
+    await expect(page.getByRole('status')).toContainText('The one-time code is still required');
+    expect((await app.call('inspect', { id: share.id })).recipients.find(profile => profile.id === issued.id).redeemed).toBeFalsy();
     await page.getByLabel('One-time access code').fill(issued.code);
     await page.getByLabel('Decryption key').fill(issued.decryptionKey);
     await page.getByRole('button', { name: 'Open delivery' }).click();
@@ -102,13 +156,16 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const secondPhone = await browser.newContext({ ignoreHTTPSErrors: true });
     try {
       const fresh = await secondPhone.newPage();
+      await fresh.goto(trusted);
       await fresh.goto(receiverLinks[0]);
+      await expect(fresh.getByLabel('Delivery link')).toHaveValue(link);
       await fresh.getByLabel('One-time access code').fill(issued.code);
       await fresh.getByLabel('Decryption key').fill(issued.decryptionKey);
       await fresh.getByRole('button', { name: 'Open delivery' }).click();
       await expect(fresh.getByRole('alert')).toContainText('This code was used');
     } finally { await secondPhone.close(); }
   } finally {
+    await admin?.close();
     await phone?.close();
     for (const server of servers) {
       await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });

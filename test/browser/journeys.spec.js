@@ -38,6 +38,8 @@ install('send and receive an encrypted archive without entering secrets on the p
   await page.getByRole('button', { name: 'Generate code' }).click();
   const code = await page.getByRole('textbox', { name: 'One-time access code' }).inputValue();
   const link = await page.getByLabel('Recipient link', { exact: true }).inputValue();
+  await expect(page.getByText('This encrypted link is desktop only.')).toBeVisible();
+  await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
   const key = await page.getByLabel('Decryption key', { exact: true }).inputValue();
   const holder = await browser.newContext();
   try {

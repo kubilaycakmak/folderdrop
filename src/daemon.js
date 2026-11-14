@@ -9,6 +9,7 @@ import { closeServer, listen } from './network.js';
 import { Store } from './store.js';
 import { check, Problem } from './errors.js';
 import { token } from './security.js';
+import { BUILD } from './version.js';
 
 const stateFile = directory => path.join(directory, 'runtime.json');
 function running(pid) {
@@ -54,7 +55,7 @@ export async function serve(directory, port, ready) {
     }, '127.0.0.1', port);
     admin.address = `http://127.0.0.1:${server.address().port}`;
     await app.open();
-    const metadata = { origin: admin.address, secret: key, pid: process.pid };
+    const metadata = { origin: admin.address, secret: key, pid: process.pid, build: BUILD };
     const temp = path.join(directory, `runtime-${key.slice(0, 12)}.tmp`);
     await fs.writeFile(temp, JSON.stringify(metadata), { mode: 0o600, flag: 'wx' });
     await fs.rename(temp, stateFile(directory));

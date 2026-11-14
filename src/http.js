@@ -50,11 +50,12 @@ const assets = new Map([
   ['admin.html', 'text/html'], ['recipient.html', 'text/html'], ['encrypted-link.html', 'text/html']
 ]);
 const cached = new Map();
-export async function asset(res, name) {
+export async function asset(res, name, render) {
   const type = assets.get(name);
   check(type, 404, 'Page not found.');
   if (!cached.has(name)) cached.set(name, await readFile(new URL(`../web/${name}`, import.meta.url)));
-  const bytes = cached.get(name);
+  const source = cached.get(name);
+  const bytes = render ? Buffer.from(render(source.toString('utf8'))) : source;
   res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Content-Length': bytes.length });
   res.end(bytes);
 }

@@ -21,6 +21,7 @@ internal static class FolderDrop
             start.CreateNoWindow = true;
             if (!configured)
             {
+                start.EnvironmentVariables["FOLDERDROP_DESKTOP_BUILD_CHECK"] = "1";
                 start.RedirectStandardError = true;
                 start.RedirectStandardOutput = true;
             }

@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>FolderDrop · Workspace</title>
-  <link rel="stylesheet" href="/assets/style.css">
-  <script type="module" src="/assets/admin.js"></script>
+  <link rel="stylesheet" href="/assets/style.css?build=@@BUILD@@">
+  <script type="module" src="/assets/admin.js?build=@@BUILD@@"></script>
 </head>
 <body class="admin">
   <a class="skip" href="#main">Skip to content</a>
   <header class="topbar">
     <a class="brand" href="/" aria-label="FolderDrop workspace"><span class="brand-mark" data-icon="drop"></span>FolderDrop</a>
-    <div class="topbar-right"><span class="connection-dot"></span> Local workspace</div>
+    <div class="topbar-right"><code id="workspace-build">v@@VERSION@@ · build @@BUILD@@</code></div>
   </header>
   <div class="workspace">
     <aside class="sidebar">
