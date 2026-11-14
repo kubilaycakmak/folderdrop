@@ -17,5 +17,5 @@ async function check(directory) {
 }
 for (const folder of ['bin', 'src', 'web', 'demo', 'scripts']) await check(path.join(root, folder));
 await Promise.all(['sharp', '@napi-rs/canvas', '@modelcontextprotocol/server', '@modelcontextprotocol/server/stdio',
-  'pdfjs-dist/package.json', 'file-type', 'mediabunny', 'mime-types', 'yazl', 'qrcode', 'zod'].map(name => import.meta.resolve(name)));
+  'pdfjs-dist/package.json', 'file-type', 'mediabunny', 'mime-types', 'yazl', 'qrcode', 'zod', 'age-encryption'].map(name => import.meta.resolve(name)));
 console.error(`Checked ${count} JavaScript modules and resolved production dependencies.`);

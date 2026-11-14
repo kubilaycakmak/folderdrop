@@ -8,5 +8,6 @@
 - Add local and LAN listeners, supervised Cloudflare Quick Tunnels, and reverse-proxy self-hosting.
 - Label loopback links as local-only and show mode-specific actions before starting a listener.
 - Disclose the HTTPS and Cloudflare trust boundaries in the workspace and documentation. Add no-index headers to private responses.
+- Require end-to-end encrypted ZIPs on Cloudflare listeners. Keep one-time codes and decrypt in the recipient's local workspace.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
 - Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.

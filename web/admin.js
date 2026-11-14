@@ -357,7 +357,7 @@ function bindShare() {
       const options = {
         local: ['Starts a 127.0.0.1 address that opens only on this computer.', 'Start local sharing'],
         lan: ['Creates links for devices on the same local network. People who can observe that network may read this HTTP traffic.', 'Start LAN sharing'],
-        public: ['Creates a temporary HTTPS address. Each recipient needs a one-time code. Cloudflare terminates HTTPS and can read file contents, codes, and other traffic passing through its network.', 'Start public tunnel'],
+        public: ['Creates a temporary HTTPS address for encrypted ZIP downloads. Cloudflare can see access codes and traffic metadata. Only recipients with the separate key can read the files.', 'Start public tunnel'],
         'self-hosted': ['Starts a listener for your HTTPS reverse proxy at the external address you configure.', 'Start proxy listener']
       };
       const [description, action] = options[mode.value];
@@ -431,19 +431,22 @@ function versions() {
 function profiles() {
   const area = $('#profiles');
   area.innerHTML = delivery.recipients.length ? delivery.recipients.map(profile => `<div class="profile-row"><div><strong>${e(profile.label)}</strong>
-    <small>${profile.revoked ? 'Revoked' : profile.expires && profile.expires <= Date.now() ? 'Expired' : profile.redeemed ? 'Code used' : 'Code unused'} · ${profile.version ? 'Snapshot' : 'Live'} · ${profile.items.length} files</small></div>
-    <div class="row">${profile.revoked ? '' : `<button class="button" data-links="${profile.id}">Link & QR</button>`}
+    <small>${profile.revoked ? 'Revoked' : profile.expires && profile.expires <= Date.now() ? 'Expired' : profile.redeemed ? 'Code used' : 'Code unused'} · ${profile.encrypted ? 'Encrypted ZIP' : 'Browser delivery'} · ${profile.items.length} files</small></div>
+    <div class="row">${profile.revoked || (delivery.network?.mode === 'public' && !profile.encrypted) ? '' : `<button class="button" data-links="${profile.id}">Link & QR</button>`}
     <button class="button" data-profile="${profile.id}">Manage</button></div></div>`).join('') : '<p class="muted">No recipient links have been issued.</p>';
   for (const node of $$('[data-profile]', area)) node.onclick = () => profileForm(delivery.recipients.find(profile => profile.id === node.dataset.profile));
   for (const node of $$('[data-links]', area)) node.onclick = () => void busy(node, () => credentials(node.dataset.links));
 }
 
-async function credentials(recipient, code) {
+async function credentials(recipient, code, decryptionKey) {
   const data = await call('links', { id: delivery.id, recipient });
   const local = data.links.length && delivery.network?.mode === 'local';
   const dialog = modal(code ? 'One-time access code' : 'Recipient link & QR', `<div class="form-stack">
-    ${code ? `<p>Copy this code now. FolderDrop only shows it when it is issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
+    ${code ? `<p>Copy these credentials now. FolderDrop only shows them when they are issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
     <button class="button" data-copy="#access-code">Copy code</button>` : ''}
+    ${decryptionKey ? `<label>Decryption key<input readonly id="decryption-key" value="${e(decryptionKey)}"></label>
+    <button class="button" data-copy="#decryption-key">Copy decryption key</button>
+    <p class="callout">Send the key separately through a trusted channel. The recipient enters it only in their installed FolderDrop workspace.</p>` : ''}
     ${local ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
     ${data.links.length ? data.links.map((link, index) => `<label>Recipient link${data.links.length > 1 ? ` ${index + 1}` : ''}
       <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">Copy link</button>`).join('') +
@@ -463,11 +466,15 @@ function profileForm(existing) {
   const recipient = existing?.id;
   const disabled = delivery.revoked || existing?.revoked || (delivery.expires && delivery.expires <= Date.now()) ||
     (existing?.expires && existing.expires <= Date.now());
+  const requireEncryption = delivery.network?.mode === 'public';
+  const encrypted = existing ? existing.encrypted : requireEncryption;
   const dialog = modal(existing ? 'Manage recipient' : 'Issue access code', `<form id="profile-form" class="form-stack">
     ${disabled ? '<p>This link is closed.</p>' : `<label>Recipient name<input name="label" value="${e(existing?.label)}" maxlength="80" required placeholder="e.g. Studio team"></label>
     ${existing ? '' : `<label>Version<select id="profile-version"><option value="" ${selected(delivery.version, null)}>Live files</option>${delivery.versions.map(version =>
       `<option value="${version.id}" ${selected(delivery.version, version.id)}>${e(version.id)}</option>`).join('')}</select></label>`}
-    <fieldset><legend>Permissions</legend><div class="form-grid">
+    ${existing ? '' : `<label class="check-line"><input type="checkbox" name="encrypted" ${checked(encrypted)} ${requireEncryption ? 'disabled' : ''}> End-to-end encrypted ZIP</label>`}
+    <p id="encrypted-permissions" class="callout" ${encrypted ? '' : 'hidden'}>Recipients receive the selected files as an encrypted ZIP in their local FolderDrop workspace. Browser previews and uploads are disabled for this link.</p>
+    <fieldset id="browser-permissions" ${encrypted ? 'disabled hidden' : ''}><legend>Permissions</legend><div class="form-grid">
     <label class="check-line"><input type="checkbox" name="preview" ${checked(existing?.preview ?? true)}> Preview files</label>
     <label class="check-line"><input type="checkbox" name="download" ${checked(existing?.download ?? true)}> Download originals and ZIPs</label>
     ${delivery.inbox ? `<label class="check-line"><input type="checkbox" name="upload" ${checked(existing?.upload)}> Send files</label>
@@ -477,7 +484,7 @@ function profileForm(existing) {
     <details><summary>Choose allowed files</summary><div id="profile-items" class="scan-files"></div></details>`}
     <p class="error" role="alert" id="profile-error" tabindex="-1" hidden></p>
     <div class="row wrap">${disabled ? '' : `<button class="button primary" id="save-profile">${existing ? 'Save permissions' : 'Generate code'}</button>`}
-    ${existing ? `${!existing.version || delivery.versions.some(version => version.id === existing.version) ? `<a class="button" href="/preview/${id}/as/${recipient}" target="_blank" rel="noopener">Preview profile</a>` : ''}
+    ${existing ? `${!encrypted && (!existing.version || delivery.versions.some(version => version.id === existing.version)) ? `<a class="button" href="/preview/${id}/as/${recipient}" target="_blank" rel="noopener">Preview profile</a>` : ''}
     ${disabled ? '' : '<button type="button" class="button" id="rotate">Generate new code</button><button type="button" class="button danger-text" id="revoke-profile">Revoke link</button>'}
     <button type="button" class="button danger-text" id="remove-profile">Remove profile</button>` : ''}</div></form>`);
   const form = $('#profile-form', dialog);
@@ -511,18 +518,25 @@ function profileForm(existing) {
       event.preventDefault();
       void busy(field('#save-profile'), async () => {
         const formData = new FormData(form);
-        const input = { id, recipient, label: formData.get('label'), preview: formData.has('preview'), download: formData.has('download'),
+        const shielded = existing ? existing.encrypted : field('[name="encrypted"]').checked;
+        const input = { id, recipient, label: formData.get('label'), preview: !shielded && formData.has('preview'), download: shielded || formData.has('download'),
           upload: formData.has('upload'), browseInbox: formData.has('browseInbox'), items: formData.getAll('item'), expires: toExpiration(formData.get('expires')),
           limit: formData.get('limit') ? +formData.get('limit') : null };
-        if (!existing) input.version = field('#profile-version').value || null;
+        if (!existing) { input.version = field('#profile-version').value || null; input.encrypted = shielded; }
         const result = await call(existing ? 'update-recipient' : 'issue', input);
         dialog.close();
         await reload();
-        if (result.code) await credentials(result.id, result.code);
+        if (result.code) await credentials(result.id, result.code, result.decryptionKey);
         else toast('Permissions saved. A redeemed recipient needs a new code.');
       }, field('#profile-error'));
     };
   }
+  const encryption = field('[name="encrypted"]');
+  if (encryption) encryption.onchange = () => {
+    field('#browser-permissions').disabled = encryption.checked;
+    field('#browser-permissions').hidden = encryption.checked;
+    field('#encrypted-permissions').hidden = !encryption.checked;
+  };
   const canUpload = $('[name="upload"]', form);
   const canBrowse = $('[name="browseInbox"]', form);
   if (canUpload && canBrowse) {
@@ -540,16 +554,59 @@ function profileForm(existing) {
       const result = await call(action, { id, recipient });
       dialog.close();
       await reload();
-      if (result.code) await credentials(recipient, result.code);
+      if (result.code) await credentials(recipient, result.code, result.decryptionKey);
       else toast(label);
     }, field('#profile-error'));
   });
-  sensitive('#rotate', 'Generate a new code?', 'This ends the existing session.', 'Code generated.', 'rotate');
+  sensitive('#rotate', 'Generate a new code?', encrypted ? 'This ends the session and generates a new decryption key.' : 'This ends the existing session.', 'Code generated.', 'rotate');
   sensitive('#revoke-profile', 'Revoke this link?', 'The recipient and their transfers will lose access.', 'Link revoked.', 'revoke-recipient');
   sensitive('#remove-profile', 'Remove this profile?', 'This permanently invalidates the link.', 'Profile removed.', 'remove-recipient');
 }
 
 $('#new').onclick = startNew;
+$('#receive-encrypted').onclick = () => {
+  const dialog = modal('Receive encrypted delivery', `<form id="receive-form" class="form-stack">
+    <p>Use the link, one-time access code and separate decryption key from the sender. FolderDrop saves a ZIP in the destination folder you choose.</p>
+    <label>Recipient link<input name="link" type="url" required maxlength="512" autocomplete="off"></label>
+    <p class="callout" id="plain-http" hidden>On a local HTTP network, the one-time code and session can be observed. The ZIP remains encrypted in transit.</p>
+    <label>One-time access code<input name="code" required maxlength="32" autocomplete="off" spellcheck="false"></label>
+    <label>Decryption key<input name="decryptionKey" type="password" required maxlength="74" autocomplete="off" spellcheck="false"></label>
+    <div class="scan-box"><label>Destination folder<input name="destination" required placeholder="Absolute path to an existing folder"></label>
+    <button type="button" class="button" id="receive-folder">Use home folder</button></div>
+    <p class="muted" id="receive-progress" role="status" hidden>Downloading and decrypting locally…</p>
+    <p class="error" id="receive-error" role="alert" tabindex="-1" hidden></p>
+    <button class="button primary" id="receive-submit">Save decrypted ZIP</button></form>`);
+  const form = $('#receive-form', dialog);
+  $('[name="link"]', form).oninput = event => {
+    $('#plain-http', form).hidden = !event.target.value.trim().startsWith('http://');
+  };
+  // Opening a second modal would discard the secret-bearing receiving form.
+  $('#receive-folder', form).onclick = event => void busy(event.currentTarget, async () => {
+    const browse = await call('browse');
+    const field = $('[name="destination"]', form);
+    field.value = browse.path;
+    field.focus();
+    field.select();
+  }, $('#receive-error', form));
+  const random = crypto.getRandomValues(new Uint8Array(32));
+  const retry = btoa(String.fromCharCode(...random)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  let controller;
+  dialog.addEventListener('close', () => { controller?.abort(); form.reset(); }, { once: true });
+  form.onsubmit = event => {
+    event.preventDefault();
+    void busy($('#receive-submit', form), async () => {
+      controller = new AbortController();
+      const input = Object.fromEntries(new FormData(form));
+      for (const name of Object.keys(input)) input[name] = input[name].trim();
+      $('#receive-progress', form).hidden = false;
+      try {
+        const saved = await api('/api/receive-encrypted', { ...input, retry }, { signal: controller.signal });
+        dialog.close();
+        toast(`Saved ${saved.name} (${bytes(saved.size)}).`);
+      } finally { $('#receive-progress', form).hidden = true; }
+    }, $('#receive-error', form));
+  };
+};
 $('#refresh').onclick = event => void busy(event.currentTarget, refresh);
 $('#quit').onclick = event => void busy(event.currentTarget, async () => {
   if (!await confirmAction('Quit FolderDrop?', 'This stops all active sharing. Your deliveries and access profiles are saved.', 'Quit FolderDrop')) return;
@@ -580,5 +637,5 @@ try {
 } catch (error) {
   main.setAttribute('aria-busy', 'false');
   main.innerHTML = `<div class="empty locked-admin">${icon('lock')}<h1>Open the local workspace</h1><p>${e(error.message)}</p><code>folderdrop --no-open</code></div>`;
-  for (const id of ['new', 'refresh', 'diagnostics', 'quit']) $(`#${id}`).disabled = true;
+  for (const id of ['new', 'refresh', 'diagnostics', 'quit', 'receive-encrypted']) $(`#${id}`).disabled = true;
 }

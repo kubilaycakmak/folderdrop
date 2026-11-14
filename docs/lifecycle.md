@@ -1,5 +1,7 @@
 # Access, versions, and transfers
 
+Cloudflare uses [end-to-end encrypted ZIP delivery](encryption.md), which has a separate local receiving workflow. Browser-only previews and inbox uploads use ordinary browser deliveries.
+
 ## One-time access
 
 Delivery IDs and recipient IDs are random. Each recipient has a separate manifest, permissions, expiry, limit, and generated 80-bit access code. A code is a password for a single redemption. FolderDrop stores its salted scrypt hash until redemption. It consumes the code and creates an expiring session in one SQLite transaction. If two people submit the code at the same time, the first committed redemption wins. FolderDrop rate-limits attempts before expensive hash work.

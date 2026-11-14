@@ -69,8 +69,8 @@ export async function mcp(directory) {
     if (!record) return { total: 0, results: [], available: false };
     return { ...slice(record.items, input), available: true };
   }, read);
-  register('issue_access_code', 'Intentionally issue and return a private link and its one-time access code. Treat the result as a credential.',
-    { id, version: id.nullable().optional(), ...profile }, input => call('issue', input));
+  register('issue_access_code', 'Issue a one-time access code. Encrypted deliveries also return a decryption key to send separately using a trusted channel.',
+    { id, version: id.nullable().optional(), encrypted: z.boolean().optional(), ...profile }, input => call('issue', input));
   register('rotate_access_code', 'End a recipient session and intentionally generate a new one-time code.', { id, recipient }, input => call('rotate', input));
   register('update_recipient', 'Edit an access profile and invalidate the current session, streams, and grants.', { id, recipient, ...profile }, input => call('update-recipient', input));
   for (const action of ['revoke', 'remove']) {

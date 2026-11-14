@@ -1,0 +1,125 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { once } from 'node:events';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { Decrypter, generateIdentity } from 'age-encryption';
+import { recipientHandler } from '../src/recipient.js';
+import { token } from '../src/security.js';
+import { fixture, draft, sharing, send, zipContents } from './helpers.js';
+
+test('a Cloudflare-style listener serves only encrypted files, even with a valid legacy session', async t => {
+  const f = await fixture(t);
+  const share = await draft(f);
+  const legacy = await sharing(f, share);
+  const old = await legacy.redeem();
+  const cookie = old.headers.get('set-cookie').split(';')[0];
+  f.app.deliveries.toggle(share.id, { mode: 'public' }, true);
+  assert.deepEqual(f.app.links(share.id, legacy.id), []);
+  await assert.rejects(f.app.call('issue', { id: share.id, encrypted: false }), { status: 400 });
+  const issued = await f.app.call('issue', { id: share.id, items: [share.items[0].id], limit: 1 });
+  const handler = recipientHandler(f.app.deliveries, f.app.uploads);
+  const server = http.createServer((req, res) => handler(req, res, {
+    share: share.id, origins: new Set([`http://${req.headers.host}`]), encryptedOnly: true, secure: true
+  }));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const oldUrl = `${origin}${new URL(legacy.url).pathname}`;
+  const url = `${origin}/s/${share.id}/${issued.id}`;
+  assert.equal((await send(`${oldUrl}/download/${share.items[0].id}`, undefined, { headers: { Cookie: cookie } })).status, 404);
+  assert.equal((await send(url + '/encrypted')).status, 401);
+  const page = await fetch(url);
+  const html = await page.text();
+  assert.equal(page.status, 200);
+  assert.match(html, /Receive encrypted delivery/);
+  assert.doesNotMatch(html, /<script|<input|hello\.txt|Private delivery/);
+  const blocked = await send(url + '/redeem', { code: issued.code }, { headers: { Origin: 'https://other.example' } });
+  assert.equal(blocked.status, 403);
+  const responses = await Promise.all([send(url + '/redeem', { code: issued.code }), send(url + '/redeem', { code: issued.code })]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 410]);
+  const { session } = await responses.find(response => response.ok).json();
+  const headers = { 'X-FolderDrop-Session': session };
+  for (const tail of ['manifest', 'download/' + share.items[0].id, 'preview/' + share.items[0].id, 'uploads', 'media/' + share.items[0].id]) {
+    assert.equal((await send(`${url}/${tail}`, undefined, { headers })).status, 404, tail);
+  }
+  assert.equal((await send(url + '/archive', { items: [share.items[0].id] }, { headers })).status, 404);
+  const protectedFile = await send(url + '/encrypted', undefined, { headers });
+  assert.equal(protectedFile.status, 200);
+  assert.match(protectedFile.headers.get('content-disposition'), /delivery\.zip\.age/);
+  assert.equal(protectedFile.headers.get('etag'), null);
+  const bytes = Buffer.from(await protectedFile.arrayBuffer());
+  assert.ok(bytes.subarray(0, 22).toString().startsWith('age-encryption.org/v1'));
+  assert.doesNotMatch(bytes.toString('latin1'), /0123456789|Notes\/hello\.txt|active\.html|AGE-SECRET-KEY/);
+  const wrongKey = new Decrypter();
+  wrongKey.addIdentity(await generateIdentity());
+  await assert.rejects(wrongKey.decrypt(bytes));
+  const correct = new Decrypter();
+  correct.addIdentity(issued.decryptionKey);
+  assert.deepEqual(await zipContents(Buffer.from(await correct.decrypt(bytes))), new Map([['Notes/hello.txt', '0123456789']]));
+  const corrupted = Buffer.from(bytes);
+  corrupted[corrupted.length - 1] ^= 1;
+  await assert.rejects(correct.decrypt(corrupted));
+  await assert.rejects(correct.decrypt(bytes.subarray(0, -1)));
+  assert.equal(f.app.inspect(share.id).recipients.find(item => item.id === issued.id).count, 1);
+  assert.ok(!JSON.stringify(f.app.inspect(share.id)).includes(issued.decryptionKey));
+  assert.ok(!JSON.stringify(f.app.store.all('recipient')).includes(issued.decryptionKey));
+  const rotated = await f.app.call('rotate', { id: share.id, recipient: issued.id });
+  assert.notEqual(rotated.decryptionKey, issued.decryptionKey);
+  assert.equal((await send(url + '/encrypted', undefined, { headers })).status, 401);
+  assert.equal((await send(url + '/redeem', { code: issued.code })).status, 401);
+});
+
+test('the local receiver keeps the key off the network, retries in one session and writes only an authenticated ZIP', async t => {
+  const f = await fixture(t);
+  const share = await draft(f);
+  const issued = await sharing(f, share, { encrypted: true, limit: 1 });
+  const captured = [];
+  let corrupt = false;
+  const proxy = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const requestBody = Buffer.concat(chunks);
+    captured.push(JSON.stringify(req.headers) + req.url + requestBody.toString());
+    const headers = { 'X-FolderDrop-Action': '1', 'Content-Type': 'application/json' };
+    if (req.headers['x-folderdrop-session']) headers['X-FolderDrop-Session'] = req.headers['x-folderdrop-session'];
+    const upstream = await fetch(new URL(req.url, issued.url), { method: req.method, headers,
+      body: req.method === 'POST' ? requestBody : undefined });
+    res.writeHead(upstream.status, Object.fromEntries(upstream.headers));
+    if (corrupt && req.url.endsWith('/encrypted') && upstream.ok) {
+      const bytes = Buffer.from(await upstream.arrayBuffer());
+      bytes[bytes.length - 1] ^= 1;
+      res.end(bytes);
+    } else Readable.fromWeb(upstream.body).pipe(res);
+  });
+  proxy.listen(0, '127.0.0.1');
+  await once(proxy, 'listening');
+  t.after(() => { proxy.closeAllConnections(); proxy.close(); });
+  const relay = new URL(issued.url);
+  relay.port = String(proxy.address().port);
+  const boot = await send(`${f.admin.address}/bootstrap`, { key: new URL(f.admin.launch().url).hash.slice(1) });
+  const headers = { Cookie: boot.headers.get('set-cookie').split(';')[0] };
+  const payload = { link: relay.href, code: issued.code, decryptionKey: issued.decryptionKey, retry: token(32), destination: f.inbox };
+  const endpoint = f.admin.address + '/api/receive-encrypted';
+  assert.equal((await send(endpoint, payload)).status, 401);
+  assert.equal((await send(endpoint, payload, { headers: { ...headers, Origin: 'https://other.example' } })).status, 403);
+  const bad = await send(endpoint, { ...payload, decryptionKey: await generateIdentity() }, { headers });
+  assert.equal(bad.status, 422);
+  assert.deepEqual(await fs.readdir(f.inbox), []);
+  corrupt = true;
+  assert.equal((await send(endpoint, payload, { headers })).status, 422);
+  assert.deepEqual(await fs.readdir(f.inbox), []);
+  corrupt = false;
+  const good = await send(endpoint, payload, { headers });
+  assert.equal(good.status, 200);
+  const saved = await good.json();
+  assert.equal(saved.name, 'FolderDrop delivery.zip');
+  assert.equal((await zipContents(await fs.readFile(path.join(f.inbox, saved.name)))).get('Notes/hello.txt'), '0123456789');
+  assert.equal((await send(endpoint, { ...payload, retry: token(32) }, { headers })).status, 410);
+  assert.equal(f.app.inspect(share.id).recipients.find(item => item.id === issued.id).count, 1);
+  assert.ok(captured.every(item => !item.includes(issued.decryptionKey)));
+  assert.ok(captured.some(item => item.includes(issued.code)));
+});
