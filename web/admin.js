@@ -98,11 +98,14 @@ function bindChoose() {
   }, $('[name="path"]', form).value);
   form.onsubmit = event => {
     event.preventDefault();
+    const submit = $('[type="submit"]', form);
+    if (submit.disabled) return;
     const value = new FormData(form).get('path');
     initial = value;
-    void busy($('[type="submit"]', form), async () => {
+    const results = $('#scan-results');
+    results.innerHTML = '<p class="muted" role="status">Scanning files…</p>';
+    void busy(submit, async () => {
       const scanned = await call('scan', { path: value });
-      const results = $('#scan-results');
       results.innerHTML = scanned.files.length ? `<div class="scan-results">
         <div class="row between"><h3>Files in this folder</h3><button class="button quiet" id="select-all">Select all</button></div>
         <div class="scan-files">${scanned.files.map((file, index) => `<label class="scan-row"><input type="checkbox" data-found="${index}"><span>${e(file.relative)}</span><small>${bytes(file.size)}</small></label>`).join('')}</div>
@@ -136,7 +139,7 @@ function bindChoose() {
         $('#next').focus();
       };
       results.scrollIntoView({ block: 'nearest' });
-    }, $('#form-error'));
+    }, $('#form-error')).finally(() => { if ($('#form-error') && !$('#form-error').hidden) results.replaceChildren(); });
   };
 }
 
@@ -290,6 +293,8 @@ function share() {
     <label id="port-field" hidden>Listener port<input type="number" id="port" min="1" max="65535" placeholder="Automatic"></label>
     <label class="full" id="external-field" hidden>External HTTPS origin<input type="url" id="external" placeholder="https://deliveries.example.com"></label>
     <label class="check-line full" id="public-field" hidden><input id="confirm-public" type="checkbox"> Start an internet-facing Cloudflare tunnel for this delivery.</label>
+    <div class="full row wrap" id="provider-field" hidden><span class="muted" id="provider-status" role="status"></span>
+    <button type="button" class="button" id="install-provider" hidden>Install verified Cloudflare connector</button></div>
     <div class="full row"><button class="button primary" id="start-sharing">${icon('globe')} Start sharing</button></div></form>` : ''}
     ${delivery.enabled && !locked ? '<div class="row" id="live-controls"><button class="button" id="stop">Stop sharing</button>' +
       (delivery.network?.mode === 'self-hosted' ? '<button class="button" id="verify">Check external origin</button>' : '') + '</div>' : ''}</section>
@@ -324,16 +329,35 @@ function bindShare() {
     $('#host').value = delivery.network?.host ?? '';
     $('#port').value = delivery.network?.port || '';
     $('#external').value = delivery.network?.external ?? '';
+    const install = $('#install-provider');
+    const providerStatus = $('#provider-status');
+    async function provider() {
+      const info = (await call('diagnostics')).tunnel;
+      providerStatus.textContent = info.available ? `Cloudflare connector ${info.version} is ready.` : info.message;
+      install.hidden = info.available;
+    }
+    install.onclick = () => void busy(install, async () => {
+      providerStatus.textContent = 'Downloading and verifying the Cloudflare connector…';
+      try {
+        await call('tunnel-install');
+        await provider();
+      } catch (error) {
+        providerStatus.textContent = 'The connector could not be installed.';
+        throw error;
+      }
+    }, $('#form-error'));
     function modeChanged() {
       const binding = ['lan', 'self-hosted'].includes(mode.value);
       $('#host-field').hidden = !binding;
       $('#port-field').hidden = !binding;
       $('#external-field').hidden = mode.value !== 'self-hosted';
       $('#public-field').hidden = mode.value !== 'public';
+      $('#provider-field').hidden = mode.value !== 'public';
+      if (mode.value === 'public') void busy(null, provider, $('#form-error'));
       const options = {
         local: ['Starts a 127.0.0.1 address that opens only on this computer.', 'Start local sharing'],
-        lan: ['Creates links for devices on the same local network.', 'Start LAN sharing'],
-        public: ['Creates a temporary HTTPS address for recipients outside your network. Each recipient still needs their one-time code.', 'Start public tunnel'],
+        lan: ['Creates links for devices on the same local network. People who can observe that network may read this HTTP traffic.', 'Start LAN sharing'],
+        public: ['Creates a temporary HTTPS address. Each recipient needs a one-time code. Cloudflare terminates HTTPS and can read file contents, codes, and other traffic passing through its network.', 'Start public tunnel'],
         'self-hosted': ['Starts a listener for your HTTPS reverse proxy at the external address you configure.', 'Start proxy listener']
       };
       const [description, action] = options[mode.value];
@@ -527,6 +551,14 @@ function profileForm(existing) {
 
 $('#new').onclick = startNew;
 $('#refresh').onclick = event => void busy(event.currentTarget, refresh);
+$('#quit').onclick = event => void busy(event.currentTarget, async () => {
+  if (!await confirmAction('Quit FolderDrop?', 'This stops all active sharing. Your deliveries and access profiles are saved.', 'Quit FolderDrop')) return;
+  await call('quit');
+  clearInterval(timer);
+  for (const button of $$('.sidebar button')) button.disabled = true;
+  main.innerHTML = '<div class="empty"><h1 tabindex="-1">FolderDrop has quit</h1><p>Open FolderDrop again to start a new workspace session.</p></div>';
+  $('h1', main).focus();
+});
 $('#diagnostics').onclick = event => void busy(event.currentTarget, async () => {
   const info = await call('diagnostics');
   modal('Diagnostics', `<dl class="diagnostics"><dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
@@ -548,5 +580,5 @@ try {
 } catch (error) {
   main.setAttribute('aria-busy', 'false');
   main.innerHTML = `<div class="empty locked-admin">${icon('lock')}<h1>Open the local workspace</h1><p>${e(error.message)}</p><code>folderdrop --no-open</code></div>`;
-  for (const id of ['new', 'refresh', 'diagnostics']) $(`#${id}`).disabled = true;
+  for (const id of ['new', 'refresh', 'diagnostics', 'quit']) $(`#${id}`).disabled = true;
 }

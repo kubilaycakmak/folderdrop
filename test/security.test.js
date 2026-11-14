@@ -12,6 +12,8 @@ test('each receipt requires an atomically consumed code and returns a scoped ses
   const link = await sharing(f, share, { items: [share.items[0].id] });
   const unauthenticated = await fetch(`${link.url}/manifest`);
   assert.equal(unauthenticated.status, 401);
+  assert.equal(unauthenticated.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.equal(unauthenticated.headers.get('cache-control'), 'private, no-store');
   assert.equal((await send(`${link.url}/redeem`, { code: '00000-00000-00000-00000' })).status, 401);
   const responses = await Promise.all([link.redeem(), link.redeem(), link.redeem()]);
   assert.deepEqual(responses.map(response => response.status).sort(), [200, 410, 410]);
@@ -19,7 +21,10 @@ test('each receipt requires an atomically consumed code and returns a scoped ses
   assert.match(details, /HttpOnly; SameSite=Strict/);
   assert.doesNotMatch(details, /; Secure/);
   const cookie = details.split(';')[0];
-  const manifest = await (await send(`${link.url}/manifest`, undefined, { headers: { Cookie: cookie } })).json();
+  const response = await send(`${link.url}/manifest`, undefined, { headers: { Cookie: cookie } });
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const manifest = await response.json();
   assert.equal(manifest.files.length, 1);
   assert.equal(manifest.files[0].path, 'Notes/hello.txt');
   assert.doesNotMatch(JSON.stringify(manifest), /absolute|identity|private\.txt|active\.html/);

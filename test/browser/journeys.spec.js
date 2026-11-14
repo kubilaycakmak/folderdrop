@@ -34,6 +34,7 @@ install('administrator can curate, preview, share, and revoke a restricted recip
   await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Photography', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Use this folder' }).click();
+  await expect(page.getByRole('heading', { name: 'Files in this folder' })).toBeVisible();
   await page.getByRole('button', { name: 'Select all' }).click();
   await page.getByRole('button', { name: 'Add selected files' }).click();
   await expect(page.getByText('7 selected', { exact: true })).toBeVisible();
@@ -55,6 +56,7 @@ install('administrator can curate, preview, share, and revoke a restricted recip
   await page.getByLabel('Network mode').selectOption('public');
   await expect(page.getByRole('button', { name: 'Start public tunnel' })).toBeVisible();
   await expect(page.getByText('Creates a temporary HTTPS address', { exact: false })).toBeVisible();
+  await expect(page.getByText('Cloudflare terminates HTTPS', { exact: false })).toBeVisible();
   await page.getByLabel('Network mode').selectOption('local');
   await page.getByRole('button', { name: 'Start local sharing' }).click();
   await expect(page.getByRole('button', { name: 'Stop sharing' })).toBeVisible();
@@ -103,6 +105,9 @@ install('administrator can curate, preview, share, and revoke a restricted recip
     expect(f.app.inspect(shareId).revoked).toBe(true);
     expect(f.app.network.status(shareId).addresses).toEqual([]);
     await expect(receiver.getByRole('heading', { name: 'Delivery unavailable' })).toBeVisible({ timeout: 7000 });
+    await page.getByRole('button', { name: 'Quit FolderDrop', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Quit FolderDrop' }).click();
+    await expect(page.getByRole('heading', { name: 'FolderDrop has quit' })).toBeVisible();
   } finally { await recipient.close(); }
 });
 

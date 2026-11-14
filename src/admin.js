@@ -72,6 +72,11 @@ export class Admin {
       if (req.method === 'GET' && url.pathname === '/api/config') return json(res, { initial: this.initial });
       if (req.method === 'POST' && url.pathname === '/api/action') {
         const input = await body(req);
+        if (input.action === 'quit') {
+          for (const id of this.app.network.active.keys()) await this.app.network.stop(id);
+          res.once('finish', () => void this.shutdown());
+          return json(res, { stopped: true });
+        }
         return json(res, await this.app.call(input.action, input.input));
       }
       const preview = /^\/preview\/([\w-]{32})(?:\/as\/([\w-]{22}))?(?:\/(.*))?$/.exec(url.pathname);

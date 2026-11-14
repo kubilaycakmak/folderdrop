@@ -13,6 +13,8 @@ The serving computer, service, and selected source volumes must stay online. Sna
 
 ## Cloudflare Quick Tunnel
 
+The public URL uses HTTPS at the Cloudflare edge. Cloudflare terminates that HTTPS connection and forwards HTTP traffic through its encrypted connector. Cloudflare can therefore read shared file bytes, previews, uploads, codes and session cookies in transit through this mode. Access codes protect against unauthorized visitors. FolderDrop does not provide end-to-end file encryption. For a Cloudflare-free connection, use a self-hosted HTTPS reverse proxy you control. See the [Cloudflare encryption model](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/).
+
 Install the provider independently from [Cloudflare Downloads](https://developers.cloudflare.com/tunnel/downloads/) or explicitly acquire the pinned executable:
 
 ```sh

@@ -135,6 +135,8 @@ test('active upload cancellation and expiry discard the uncommitted chunk', { ti
   const expiring = partial(replacement.id);
   assert.equal(await expiring, 'ECONNRESET');
   assert.equal((await auth.request('uploads')).status, 410);
+  // The client can observe the closed socket before the server closes the staged file.
+  for (let attempt = 0; attempt < 40 && f.app.uploads.busy.has(replacement.id); attempt++) await delay(25);
   await f.app.uploads.recover();
   assert.deepEqual(await fs.readdir(path.join(f.inbox, '.folderdrop-incoming')), []);
 });

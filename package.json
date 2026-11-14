@@ -1,7 +1,7 @@
 {
   "name": "@kubilaycakmak/folderdrop",
   "version": "1.0.0",
-  "description": "Curated, private file deliveries from your own computer",
+  "description": "Open-source private file and folder sharing with one-time access codes, previews, and inbox uploads",
   "type": "module",
   "license": "MIT",
   "author": "FolderDrop contributors",
@@ -26,7 +26,8 @@
     "demo/",
     "docs/",
     "CHANGELOG.md",
-    "CONTRIBUTING.md"
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "dev": "node bin/folderdrop.js serve",
@@ -34,6 +35,7 @@
     "test": "node --test test/*.test.js",
     "test:browser": "playwright test",
     "build": "node scripts/check.js",
+    "build:desktop": "node scripts/desktop.js",
     "verify:package": "node scripts/pack.js",
     "prepack": "npm run build"
   },
@@ -57,6 +59,10 @@
   },
   "keywords": [
     "file-sharing",
+    "folder-sharing",
+    "private-file-sharing",
+    "one-time-link",
+    "cloudflare-tunnel",
     "delivery",
     "cli",
     "mcp",
