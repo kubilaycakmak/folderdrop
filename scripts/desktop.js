@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const manifests = ['package.json', 'package-lock.json'];
@@ -147,10 +147,10 @@ async function smoke(archive) {
     });
     const timer = setTimeout(() => child.kill(), 15000);
     try { await launcherExit; } finally { clearTimeout(timer); }
-    const { discover, request } = await import(pathToFileURL(path.resolve(path.dirname(entry), '..', 'src', 'daemon.js')));
-    const running = await discover(state);
-    if (!running) throw new Error('The launcher did not start the bundled service.');
-    const launch = await request(running, 'launch', {});
+    await fs.access(path.join(state, 'runtime.json')).catch(() => {
+      throw new Error('The launcher did not start the bundled service.');
+    });
+    const launch = JSON.parse(invoke(bundledNode, [entry, '--no-open', '--json']));
     const { origin, hash } = new URL(launch.url);
     const page = await fetch(origin, { signal: AbortSignal.timeout(5000) });
     if (!page.ok || !(await page.text()).includes('FolderDrop')) throw new Error('The launcher did not start the FolderDrop workspace.');
