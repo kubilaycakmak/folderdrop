@@ -85,14 +85,14 @@ export async function mcp(directory) {
     async input => summary(await call('remove-version', input)), { destructiveHint: true });
   register('start_sharing', 'Start a loopback or LAN recipient listener.', { id, mode: z.enum(['local', 'lan']), ...binding },
     async input => summary(await call('start', input)));
-  register('start_self_hosted_sharing', 'Explicitly start the HTTPS reverse-proxy origin for a configured external URL.', { id, external: string, ...binding },
+  register('start_self_hosted_sharing', 'Explicitly start the HTTPS reverse-proxy origin for a configured external URL.', { id, external: string, receiverUrl: z.string().url().optional(), ...binding },
     async input => summary(await call('start', { ...input, mode: 'self-hosted' })), { openWorldHint: true });
   register('start_public_sharing', 'Explicitly create a Cloudflare Quick Tunnel for one delivery. The operator must authorize public exposure.',
-    { id, confirmPublic: z.literal(true) }, async input => summary(await call('start', { ...input, mode: 'public' })), { openWorldHint: true });
+    { id, confirmPublic: z.literal(true), receiverUrl: z.string().url().optional() }, async input => summary(await call('start', { ...input, mode: 'public' })), { openWorldHint: true });
   register('verify_self_hosted_origin', 'Probe the configured external HTTPS endpoint from this host.', { id }, input => call('verify', input), { openWorldHint: true });
   register('get_recipient_links', 'Request the currently usable addresses for an existing recipient profile.', { id, recipient }, async input => {
-    const { links } = await call('links', input);
-    return { links };
+    const { links, receiverLinks } = await call('links', input);
+    return { links, receiverLinks };
   }, read);
   for (const action of ['stop', 'revoke', 'remove']) {
     register(`${action}_delivery`, `${action === 'stop' ? 'Stop the listener and interrupt transfers' :

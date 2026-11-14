@@ -77,8 +77,12 @@ export class Application {
       case 'remove-recipient': return this.deliveries.revokeRecipient(id, recipient, true);
       case 'links': {
         const links = this.links(id, recipient);
-        const address = links[0];
-        return { links, qr: address ? await QRCode.toDataURL(address, { width: 256, margin: 2 }) : null };
+        const share = this.deliveries.get(id);
+        const record = this.deliveries.recipient(share, recipient);
+        const receiverLinks = record.encryption && share.network?.receiverUrl ?
+          links.map(link => `${share.network.receiverUrl}#${new URLSearchParams({ delivery: link })}`) : [];
+        const address = receiverLinks[0] ?? links[0];
+        return { links, receiverLinks, qr: address ? await QRCode.toDataURL(address, { width: 256, margin: 2 }) : null };
       }
       case 'start':
         check(input.mode !== 'public' || input.confirmPublic === true, 400, 'Explicitly confirm public sharing to start Cloudflare.');

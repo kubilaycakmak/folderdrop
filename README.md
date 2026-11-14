@@ -1,6 +1,6 @@
 # FolderDrop · Private File and Folder Sharing
 
-FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP for the recipient's local FolderDrop app.
+FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP. Recipients can use the desktop app or an independently hosted [web receiver for phones](docs/encryption.md#set-up-the-web-receiver-for-phones).
 
 [Try FolderDrop](#try-it) · [Desktop packages](docs/desktop.md) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
 

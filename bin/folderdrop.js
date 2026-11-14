@@ -53,6 +53,7 @@ Usage: folderdrop [folder] [options]
   --host IP --port PORT       Recipient listener interface and port
   --external HTTPS_ORIGIN     External origin for self-hosted mode
   --confirm-public            Explicitly authorize creation of a public tunnel
+  --receiver-url URL          Trusted HTTPS web receiver for encrypted deliveries
   --input FILE                Read operation parameters from a JSON file
   --title TEXT --label TEXT   Delivery title or recipient label
   --encrypted                Issue a link for an encrypted ZIP
@@ -63,7 +64,7 @@ Exit status: 0 success, 2 input error, 3 not found, 4 denied/closed/conflict,
 `;
 
 const commands = new Set('serve menu create list inspect edit snapshot set-version remove-version issue rotate update-recipient revoke-recipient remove-recipient links start verify stop revoke remove transfers diagnostics tunnel-install mcp shutdown daemon'.split(' '));
-const strings = Object.fromEntries('data-dir admin-port mode host port external input title label'.split(' ').map(key => [key, { type: 'string' }]));
+const strings = Object.fromEntries('data-dir admin-port mode host port external input title label receiver-url'.split(' ').map(key => [key, { type: 'string' }]));
 const flags = Object.fromEntries('json no-open confirm-public encrypted'.split(' ').map(key => [key, { type: 'boolean' }]));
 
 function openBrowser(url) {
@@ -85,11 +86,12 @@ async function output(result, options, action) {
     }
     return;
   }
-  const { links, qr, ...rest } = Array.isArray(result) ? { results: result } : result;
+  const { links, receiverLinks, qr, ...rest } = Array.isArray(result) ? { results: result } : result;
   if (Object.keys(rest).length) console.log(JSON.stringify(rest, null, 2));
   if (links?.length) {
     console.log(links.join('\n'));
-    if (process.stdout.isTTY) console.log(await QRCode.toString(links[0], { type: 'terminal', small: true }));
+    if (receiverLinks?.length) console.log('Phone or browser link\n' + receiverLinks.join('\n'));
+    if (process.stdout.isTTY) console.log(await QRCode.toString(receiverLinks?.[0] ?? links[0], { type: 'terminal', small: true }));
   }
 }
 
@@ -163,6 +165,7 @@ async function main() {
   if (['edit', 'snapshot', 'set-version'].includes(action) && input.revision === undefined) input.revision = (await call('inspect', { id: second })).revision;
   if (action === 'start') {
     input = { ...input, mode: options.mode ?? input.mode, host: options.host ?? input.host, external: options.external ?? input.external,
+      receiverUrl: options['receiver-url'] ?? input.receiverUrl,
       port: options.port === undefined ? input.port : Number(options.port), confirmPublic: options['confirm-public'] === true };
   }
   let result = await call(action, input);
