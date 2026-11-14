@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=FolderDrop
+Comment=Share files and folders with one-time access codes
+Exec=/usr/bin/folderdrop-desktop
+Icon=folderdrop
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=files;folders;sharing;delivery;

@@ -55,6 +55,7 @@ install('administrator can curate, preview, share, and revoke a restricted recip
   await page.getByLabel('Network mode').selectOption('public');
   await expect(page.getByRole('button', { name: 'Start public tunnel' })).toBeVisible();
   await expect(page.getByText('Creates a temporary HTTPS address', { exact: false })).toBeVisible();
+  await expect(page.getByText('Cloudflare terminates HTTPS', { exact: false })).toBeVisible();
   await page.getByLabel('Network mode').selectOption('local');
   await page.getByRole('button', { name: 'Start local sharing' }).click();
   await expect(page.getByRole('button', { name: 'Stop sharing' })).toBeVisible();

@@ -32,8 +32,8 @@ try {
   const [archive] = JSON.parse(pack.stdout);
   const files = archive.files.map(file => file.path);
   for (const file of ['bin/folderdrop.js', 'src/application.js', 'src/tunnel-child.js', 'src/pdf-worker.js', 'src/mcp.js', 'web/admin.html',
-    'web/recipient.html', 'web/style.css', 'demo/fixtures.js', 'package.json', 'README.md', 'LICENSE']) assert.ok(files.includes(file), file);
-  for (const file of files) assert.match(file, /^(?:bin\/|src\/|web\/|demo\/|docs\/|package\.json$|README\.md$|LICENSE$|CHANGELOG\.md$|CONTRIBUTING\.md$)/);
+    'web/recipient.html', 'web/style.css', 'demo/fixtures.js', 'package.json', 'README.md', 'LICENSE', 'SECURITY.md']) assert.ok(files.includes(file), file);
+  for (const file of files) assert.match(file, /^(?:bin\/|src\/|web\/|demo\/|docs\/|package\.json$|README\.md$|LICENSE$|CHANGELOG\.md$|CONTRIBUTING\.md$|SECURITY\.md$)/);
   await fs.writeFile(path.join(cwd, 'package.json'), '{"name":"fresh-folderdrop-user","version":"1.0.0","private":true}');
   await npm(['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', path.join(sandbox, archive.filename)], cwd);
   const dependencyList = await npm(['ls', '--omit=dev', '--all', '--json'], cwd);
