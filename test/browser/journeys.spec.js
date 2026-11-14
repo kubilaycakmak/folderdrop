@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { serve } from '../../src/daemon.js';
 import { demoManifest, fixtures } from '../../demo/fixtures.js';
+import { zipContents } from '../helpers.js';
 
 async function product(use) {
   const directory = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()), 'folderdrop-browser-'));
@@ -26,6 +27,37 @@ async function screenshot(page, name) {
   await fs.mkdir(folder, { recursive: true });
   await page.screenshot({ path: path.join(folder, `${name}.png`), fullPage: true, animations: 'disabled' });
 }
+
+install('send and receive an encrypted archive without entering secrets on the public page', async ({ folderdrop: f, page, browser }) => {
+  const share = await f.app.call('create', demoManifest(f.source, f.inbox));
+  await f.app.call('start', { id: share.id, mode: 'local' });
+  await page.goto(f.admin.launch().url);
+  await page.getByRole('button', { name: 'Issue access code' }).click();
+  await page.getByLabel('Recipient name').fill('Local test receiver');
+  await page.getByLabel('End-to-end encrypted ZIP').check();
+  await page.getByRole('button', { name: 'Generate code' }).click();
+  const code = await page.getByRole('textbox', { name: 'One-time access code' }).inputValue();
+  const link = await page.getByLabel('Recipient link', { exact: true }).inputValue();
+  const key = await page.getByLabel('Decryption key', { exact: true }).inputValue();
+  const holder = await browser.newContext();
+  try {
+    const recipient = await holder.newPage();
+    await recipient.goto(link);
+    await expect(recipient.getByRole('heading', { name: 'Encrypted delivery' })).toBeVisible();
+    await expect(recipient.locator('input, script')).toHaveCount(0);
+    await recipient.goto(f.admin.launch().url);
+    await recipient.getByRole('button', { name: 'Receive encrypted delivery' }).click();
+    const dialog = recipient.getByRole('dialog');
+    await dialog.getByLabel('Recipient link').fill(link);
+    await dialog.getByLabel('One-time access code').fill(code);
+    await dialog.getByLabel('Decryption key').fill(key);
+    await dialog.getByLabel('Destination folder').fill(f.inbox);
+    await dialog.getByRole('button', { name: 'Save decrypted ZIP' }).click();
+    await expect(recipient.getByText(/Saved FolderDrop delivery.zip/)).toBeVisible();
+    const files = await zipContents(await fs.readFile(path.join(f.inbox, 'FolderDrop delivery.zip')));
+    expect(files.has('Project notes/Read me.txt')).toBe(true);
+  } finally { await holder.close(); }
+});
 
 install('administrator can curate, preview, share, and revoke a restricted recipient link', async ({ folderdrop: f, page, browser }) => {
   const { url } = f.admin.launch(f.source);
@@ -56,7 +88,7 @@ install('administrator can curate, preview, share, and revoke a restricted recip
   await page.getByLabel('Network mode').selectOption('public');
   await expect(page.getByRole('button', { name: 'Start public tunnel' })).toBeVisible();
   await expect(page.getByText('Creates a temporary HTTPS address', { exact: false })).toBeVisible();
-  await expect(page.getByText('Cloudflare terminates HTTPS', { exact: false })).toBeVisible();
+  await expect(page.getByText('Cloudflare can see access codes and traffic metadata.', { exact: false })).toBeVisible();
   await page.getByLabel('Network mode').selectOption('local');
   await page.getByRole('button', { name: 'Start local sharing' }).click();
   await expect(page.getByRole('button', { name: 'Stop sharing' })).toBeVisible();

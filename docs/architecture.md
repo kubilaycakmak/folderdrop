@@ -41,6 +41,7 @@ Every recipient operation checks its delivery, profile, session and item permiss
 | `yazl` | MIT | Streaming ZIP and ZIP64 |
 | `file-type` | MIT | Signature detection for returned files |
 | `mime-types` | MIT | Standard download content types |
+| `age-encryption` | BSD-3-Clause | Streaming standards-based authenticated encryption for ZIP deliveries |
 | `qrcode` | MIT | Browser and terminal QR output |
 
 Production and development packages are pinned in the lockfile. Install production optional platform packages for Sharp and Canvas. The tarball does not include bundled third-party runtime source, browser binaries, provider binaries, or build tooling. Consult the installed packages for transitive notices and native-library licenses.

@@ -47,7 +47,7 @@ export async function body(req, limit = 2 * 1024 ** 2) {
 const assets = new Map([
   ['style.css', 'text/css'],
   ['shared.js', 'text/javascript'], ['admin.js', 'text/javascript'], ['recipient.js', 'text/javascript'],
-  ['admin.html', 'text/html'], ['recipient.html', 'text/html']
+  ['admin.html', 'text/html'], ['recipient.html', 'text/html'], ['encrypted-link.html', 'text/html']
 ]);
 const cached = new Map();
 export async function asset(res, name) {

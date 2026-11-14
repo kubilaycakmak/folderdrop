@@ -1,6 +1,6 @@
 # FolderDrop · Private File and Folder Sharing
 
-FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Recipients can preview photos and documents, download individual files or a ZIP, and send files back when invited.
+FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP for the recipient's local FolderDrop app.
 
 [Try FolderDrop](#try-it) · [Desktop packages](docs/desktop.md) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
 
@@ -36,10 +36,10 @@ The first successful redemption consumes the code and opens a browser session. T
 | --- | --- |
 | Local | Loopback on your own computer |
 | LAN | Your local network over HTTP |
-| Cloudflare Quick Tunnel | Cloudflare terminates HTTPS and can technically read file contents, access codes, and other traffic sent through the tunnel |
-| Self-hosted HTTPS | The HTTPS reverse proxy you configure handles the traffic. Use an origin and proxy you control to keep Cloudflare out of the file path |
+| Cloudflare Quick Tunnel | Encrypted ZIP required. Cloudflare sees access codes, session tokens, sizes and timing. The decryption key is sent separately through a trusted channel. |
+| Self-hosted HTTPS | The HTTPS reverse proxy you configure handles the traffic. Select an encrypted ZIP for a recipient when the proxy should only see ciphertext. |
 
-FolderDrop limits access to selected files and recipient permissions. It provides access-controlled sharing and leaves original files on disk. See [the security policy](SECURITY.md) and [networking guide](docs/networking.md) for limitations and reporting.
+FolderDrop limits access to selected files and recipient permissions. It leaves original files on disk. See [encrypted delivery](docs/encryption.md) for sending and receiving keys, and [the security policy](SECURITY.md) for limitations and reporting.
 
 ## Commands
 

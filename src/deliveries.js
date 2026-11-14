@@ -5,6 +5,7 @@ import { accessCode, Capacity, digest, matchesSecret, secretHash, token } from '
 import { check, Problem } from './errors.js';
 import { Snapshots } from './snapshots.js';
 import { MediaPreviews } from './media.js';
+import { generateIdentity, identityToRecipient } from 'age-encryption';
 
 const DAY = 86400000;
 export const SESSION_AGE = 7 * DAY;
@@ -14,8 +15,14 @@ const overlap = (a, b) => {
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 };
 export const closed = (record, now = Date.now()) => record.revoked || (record.expires != null && record.expires <= now);
-const brief = ({ id, label, items, preview, download, upload, browseInbox, limit, expires, version, redeemed, revoked, count }) =>
-  ({ id, label, items, preview, download, upload, browseInbox, limit, expires, version, redeemed, revoked, count });
+const brief = ({ id, label, items, preview, download, upload, browseInbox, limit, expires, version, redeemed, revoked, count, encryption }) =>
+  ({ id, label, items, preview, download, upload, browseInbox, limit, expires, version, redeemed, revoked, count, encrypted: !!encryption });
+
+async function newEncryption() {
+  const decryptionKey = await generateIdentity();
+  const encryption = await identityToRecipient(decryptionKey);
+  return { decryptionKey, encryption };
+}
 
 export class Deliveries {
   changes = new Capacity(4, 'Too many deliveries are being edited.');
@@ -188,19 +195,27 @@ export class Deliveries {
     check(!closed(share), 410, 'This delivery has expired or been revoked.');
     const version = input.version === undefined ? share.version : input.version || null;
     const content = this.content(share, version);
-    const permissions = profile(input, content.items, !!share.inbox);
+    const encrypted = input.encrypted ?? share.network?.mode === 'public';
+    check(typeof encrypted === 'boolean', 400, 'Select a valid encryption mode.');
+    check(share.network?.mode !== 'public' || encrypted, 400, 'Cloudflare requires an encrypted recipient link.');
+    check(!encrypted || (input.download !== false && !input.upload && !input.browseInbox), 400,
+      'Encrypted links only support downloads. Use a separate trusted delivery for file requests.');
+    const permissions = profile(encrypted ? { ...input, preview: false } : input, content.items, !!share.inbox);
+    const items = permissions.items ?? content.items.map(item => item.id);
+    check(!encrypted || items.length > 0, 400, 'Select at least one file for the encrypted archive.');
     const code = accessCode();
     const release = this.hashing.enter();
     try {
+      const { encryption, decryptionKey } = encrypted ? await newEncryption() : {};
       const hash = await secretHash(code);
       const recipient = this.store.transaction(() => {
         check(this.get(id).revision === share.revision, 409, 'The delivery changed. Review and retry.');
         check(this.recipients(id).length < 100, 507, 'Remove a recipient before adding another.');
-        return this.store.put('recipient', { ...permissions, id: token(16), share: id, version, hash,
-          items: permissions.items ?? content.items.map(item => item.id), redeemed: null,
+        return this.store.put('recipient', { ...permissions, id: token(16), share: id, version, hash, encryption,
+          items, redeemed: null,
           revoked: false, epoch: 0, count: 0 });
       });
-      return { ...brief(recipient), code };
+      return { ...brief(recipient), code, ...(decryptionKey ? { decryptionKey } : {}) };
     } finally { release(); }
   }
 
@@ -217,12 +232,13 @@ export class Deliveries {
     const code = accessCode();
     const release = this.hashing.enter();
     try {
+      const { encryption, decryptionKey } = recipient.encryption ? await newEncryption() : {};
       const hash = await secretHash(code);
       const fresh = this.recipient(this.get(id), recipientId);
       check(fresh.epoch === recipient.epoch && !closed(fresh) && !closed(this.get(id)), 409, 'The link changed. Reload and retry.');
-      this.store.transaction(() => this.invalidate({ ...fresh, redeemed: null, hash }));
+      this.store.transaction(() => this.invalidate({ ...fresh, redeemed: null, hash, encryption }));
       this.sweep();
-      return { ...brief(this.recipient(share, recipientId)), code };
+      return { ...brief(this.recipient(share, recipientId)), code, ...(decryptionKey ? { decryptionKey } : {}) };
     } finally { release(); }
   }
 
@@ -236,8 +252,13 @@ export class Deliveries {
     const share = this.get(id);
     const recipient = this.recipient(share, recipientId);
     check(!closed(share) && !closed(recipient), 410, 'This link is closed.');
-    const updated = profile({ ...recipient, ...input }, this.content(share, recipient.version).items, !!share.inbox);
-    this.store.transaction(() => this.invalidate({ ...recipient, ...updated, items: updated.items ?? this.content(share, recipient.version).items.map(item => item.id) }));
+    check(!recipient.encryption || (input.download !== false && !input.upload && !input.browseInbox), 400,
+      'Encrypted links only support downloads. Use a separate trusted delivery for file requests.');
+    const updated = profile({ ...recipient, ...input, ...(recipient.encryption ? { preview: false } : {}) },
+      this.content(share, recipient.version).items, !!share.inbox);
+    const items = updated.items ?? this.content(share, recipient.version).items.map(item => item.id);
+    check(!recipient.encryption || items.length > 0, 400, 'Select at least one file for the encrypted archive.');
+    this.store.transaction(() => this.invalidate({ ...recipient, ...updated, items }));
     this.sweep();
     return brief(this.recipient(share, recipientId));
   }
@@ -288,7 +309,8 @@ export class Deliveries {
   context(id, recipientId, secret, permission) {
     const { share, recipient } = this.gate(id, recipientId);
     const session = this.store.get('session', recipientId);
-    check(secret && session && session.secret === digest(secret) && session.expires > Date.now() && session.epoch === recipient.epoch,
+    check(typeof secret === 'string' && /^[\w-]{43}$/.test(secret) && session &&
+      session.secret === digest(secret) && session.expires > Date.now() && session.epoch === recipient.epoch,
       401, 'Enter your one-time access code.', 'authentication_required');
     check(!permission || recipient[permission], 403, 'The sender disabled this action.', 'permission_denied');
     const content = this.content(share, recipient.version);
@@ -333,7 +355,7 @@ export class Deliveries {
       check(recipient.epoch === context.recipient.epoch && recipient.download, 403, 'The download permission changed.');
       const grants = this.store.grants(recipientId).filter(grant => grant.epoch === recipient.epoch && grant.until > Date.now());
       const existing = grants.find(grant => grant.kind === kind && grant.key === key && (!requestedId || grant.id === requestedId));
-      if (existing && (kind === 'file' || requestedId)) return existing;
+      if (existing && (kind === 'file' || kind === 'encrypted' || requestedId)) return existing;
       check(!requestedId, 410, 'The resume grant expired or the file changed.');
       check(grants.length < 128, 429, 'Too many active download grants. Try again later.');
       check(recipient.limit == null || recipient.count < recipient.limit, 403, 'The download limit has been reached.', 'download_limit');

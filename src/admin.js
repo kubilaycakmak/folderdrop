@@ -70,6 +70,7 @@ export class Admin {
         return json(res, await this.app.call(input.action, input.input));
       }
       if (req.method === 'GET' && url.pathname === '/api/config') return json(res, { initial: this.initial });
+      if (req.method === 'POST' && url.pathname === '/api/receive-encrypted') return await this.app.receiver.handle(req, res);
       if (req.method === 'POST' && url.pathname === '/api/action') {
         const input = await body(req);
         if (input.action === 'quit') {

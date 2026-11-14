@@ -88,6 +88,7 @@
   .nav-delivery:hover { background: #e5ebe0; }
   .nav-folder { display: grid; place-items: center; width: 1.95rem; height: 1.95rem; border-radius: .4rem; background: var(--surface); color: var(--accent); }
   .side-bottom { display: grid; justify-items: start; margin-top: auto; }
+  #receive-encrypted { margin-top: .45rem; }
   .main { min-width: 0; padding: 3rem clamp(1rem, 4.5vw, 4.5rem); }
   .main-inner { max-width: 980px; margin: 0 auto; }
   .page-heading { display: grid; gap: .65rem; margin-bottom: 1.55rem; }
@@ -263,6 +264,7 @@
     .sidebar { display: grid; grid-template-columns: 1fr max-content; gap: .4rem; padding: .55rem .8rem; border-right: none; border-bottom: 1px solid var(--line); }
     .sidebar-heading { margin: 0; }
     .sidebar > .wide { width: auto; }
+    #receive-encrypted { grid-column: 1 / -1; justify-self: start; margin-top: 0; }
     .sidebar nav { grid-column: 1 / -1; display: flex; overflow: auto; margin: 0; }
     .nav-delivery { width: auto; min-width: 8rem; max-width: 13rem; }
     .sidebar .side-bottom { display: flex; flex-wrap: wrap; grid-column: 1 / -1; justify-self: start; min-height: 2rem; }

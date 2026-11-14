@@ -4,6 +4,7 @@ import { check } from './errors.js';
 import { SESSION_AGE } from './deliveries.js';
 import { format } from './previews.js';
 import { sendArchive, sendItem } from './transfers.js';
+import { Encrypter } from 'age-encryption';
 
 const SESSION = 'folderdrop_recipient';
 const routes = /^\/s\/([\w-]{32})\/([\w-]{22})(?:\/(.*))?$/;
@@ -108,6 +109,29 @@ export function recipientHandler(deliveries, uploads) {
       const route = routes.exec(url.pathname);
       check(route && route[1] === config.share, 404, 'This private link is unavailable.');
       const [, id, recipientId, tail = ''] = route;
+      const recipient = deliveries.recipient(deliveries.get(id), recipientId);
+      check(!config.encryptedOnly || recipient.encryption, 404, 'This private link is unavailable.');
+      if (recipient.encryption) {
+        if (req.method === 'GET' && !tail) {
+          res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+          return await asset(res, 'encrypted-link.html');
+        }
+        if (req.method === 'POST' && tail === 'redeem') {
+          origin(req, config.origins);
+          const input = await body(req, 4096);
+          const secret = await deliveries.redeem(id, recipientId, input.code);
+          return json(res, { session: secret });
+        }
+        if (req.method === 'GET' && tail === 'encrypted') {
+          const getEncrypted = () => deliveries.context(id, recipientId, req.headers['x-folderdrop-session'], 'download');
+          const context = getEncrypted();
+          check(context.items.length, 404, 'There are no files available for this recipient.');
+          const encrypter = new Encrypter();
+          encrypter.addRecipient(context.recipient.encryption);
+          return await sendArchive(req, res, deliveries, getEncrypted, context.items.map(item => item.id), encrypter);
+        }
+        check(false, 404, 'Encrypted links deliver files through the local FolderDrop recipient.');
+      }
       const getContext = permission => deliveries.context(id, recipientId, cookie(req, SESSION), permission);
       if (req.method === 'GET' && !tail) return await asset(res, 'recipient.html');
       if (req.method === 'GET' && tail === 'access-check') { getContext(); return res.writeHead(204).end(); }

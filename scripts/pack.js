@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFile as execFileCB } from 'node:child_process';
 import { promisify } from 'node:util';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const execFile = promisify(execFileCB);
@@ -32,7 +32,7 @@ try {
   const [archive] = JSON.parse(pack.stdout);
   const files = archive.files.map(file => file.path);
   for (const file of ['bin/folderdrop.js', 'src/application.js', 'src/tunnel-child.js', 'src/pdf-worker.js', 'src/mcp.js', 'web/admin.html',
-    'web/recipient.html', 'web/style.css', 'demo/fixtures.js', 'package.json', 'README.md', 'LICENSE', 'SECURITY.md']) assert.ok(files.includes(file), file);
+    'web/recipient.html', 'web/encrypted-link.html', 'web/style.css', 'demo/fixtures.js', 'package.json', 'README.md', 'LICENSE', 'SECURITY.md']) assert.ok(files.includes(file), file);
   for (const file of files) assert.match(file, /^(?:bin\/|src\/|web\/|demo\/|docs\/|package\.json$|README\.md$|LICENSE$|CHANGELOG\.md$|CONTRIBUTING\.md$|SECURITY\.md$)/);
   await fs.writeFile(path.join(cwd, 'package.json'), '{"name":"fresh-folderdrop-user","version":"1.0.0","private":true}');
   await npm(['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', path.join(sandbox, archive.filename)], cwd);
@@ -58,6 +58,18 @@ try {
   const cookie = redeemed.headers.get('set-cookie').split(';')[0];
   const original = await fetch(`${recipient.links[0]}/download/${share.items[0].id}`, { headers: { Cookie: cookie } });
   assert.equal(await original.text(), 'Packed application smoke test.');
+  const encrypted = await run('issue', share.id, '--encrypted');
+  const actions = { 'X-FolderDrop-Action': '1', 'Content-Type': 'application/json' };
+  const bootstrap = await fetch(admin.origin + '/bootstrap', { method: 'POST', headers: actions, body: JSON.stringify({ key: admin.hash.slice(1) }) });
+  assert.equal(bootstrap.status, 200);
+  const received = await fetch(admin.origin + '/api/receive-encrypted', { method: 'POST',
+    headers: { ...actions, Cookie: bootstrap.headers.get('set-cookie').split(';')[0] },
+    body: JSON.stringify({ link: encrypted.links[0], code: encrypted.code, decryptionKey: encrypted.decryptionKey,
+      destination: outside, retry: randomBytes(32).toString('base64url') }) });
+  assert.equal(received.status, 200);
+  const zip = await fs.readFile(path.join(outside, (await received.json()).name));
+  assert.equal(zip.subarray(0, 4).toString('hex'), '504b0304');
+  assert.ok(zip.includes('Packed application smoke test.'));
   const demoEntry = path.resolve(path.dirname(entry), '../demo/create.js');
   const demo = JSON.parse((await execFile(process.execPath, [demoEntry, path.join(sandbox, 'demo')],
     { cwd: outside, env, timeout: 15000 })).stdout);

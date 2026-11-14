@@ -13,7 +13,7 @@ The serving computer, service, and selected source volumes must stay online. Sna
 
 ## Cloudflare Quick Tunnel
 
-The public URL uses HTTPS at the Cloudflare edge. Cloudflare terminates that HTTPS connection and forwards HTTP traffic through its encrypted connector. Cloudflare can therefore read shared file bytes, previews, uploads, codes and session cookies in transit through this mode. Access codes protect against unauthorized visitors. FolderDrop does not provide end-to-end file encryption. For a Cloudflare-free connection, use a self-hosted HTTPS reverse proxy you control. See the [Cloudflare encryption model](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/).
+The public URL uses HTTPS at the Cloudflare edge. FolderDrop also encrypts delivered file bytes and entry names before sending them through that HTTPS connection. Quick Tunnel requires encrypted recipient links. Access codes and session tokens remain visible to the HTTPS proxy, as do sizes and traffic timing. Share the private decryption key through a separate trusted channel. See [encrypted delivery](encryption.md) and the [Cloudflare encryption model](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/).
 
 Install the provider independently from [Cloudflare Downloads](https://developers.cloudflare.com/tunnel/downloads/) or explicitly acquire the pinned executable:
 
@@ -28,7 +28,7 @@ FolderDrop looks for an absolute executable in `FOLDERDROP_CLOUDFLARED`, a local
 
 FolderDrop gives the connector an empty private config and a loopback metrics address. It watches `/ready` and the allocated hostname, probes its own recipient-only endpoint over public HTTPS, and reconnects with bounded backoff. Stopping, revoking, or losing the service process tears down the connector. A new Quick Tunnel can have a different hostname. Fetch fresh recipient links after reconnect and use a new code if a previous browser cookie was tied to the old origin. FolderDrop leaves Quick Tunnels stopped after a service restart.
 
-[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) provide temporary addresses for testing and development, have a 200 in-flight request cap, and do not guarantee uptime. FolderDrop uses polling and upload chunks no larger than 8 MiB, with 4 MiB chunks in the browser. Cloudflare edge limits and timeouts still apply. Check DNS, outbound HTTPS and port 7844, the provider version, and Cloudflare availability if readiness stays disconnected. Use a correctly configured reverse proxy for stable addresses.
+[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) provide temporary addresses for testing and development, have a 200 in-flight request cap, and do not guarantee uptime. Cloudflare edge limits and timeouts still apply to encrypted ZIP downloads. Check DNS, outbound HTTPS and port 7844, the provider version, and Cloudflare availability if readiness stays disconnected. Use a correctly configured reverse proxy for stable addresses.
 
 ## HTTPS reverse proxy
 

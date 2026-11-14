@@ -55,6 +55,7 @@ Usage: folderdrop [folder] [options]
   --confirm-public            Explicitly authorize creation of a public tunnel
   --input FILE                Read operation parameters from a JSON file
   --title TEXT --label TEXT   Delivery title or recipient label
+  --encrypted                Issue a link for an encrypted ZIP
   --no-open                   Skip launching a browser
 
 Exit status: 0 success, 2 input error, 3 not found, 4 denied/closed/conflict,
@@ -63,7 +64,7 @@ Exit status: 0 success, 2 input error, 3 not found, 4 denied/closed/conflict,
 
 const commands = new Set('serve menu create list inspect edit snapshot set-version remove-version issue rotate update-recipient revoke-recipient remove-recipient links start verify stop revoke remove transfers diagnostics tunnel-install mcp shutdown daemon'.split(' '));
 const strings = Object.fromEntries('data-dir admin-port mode host port external input title label'.split(' ').map(key => [key, { type: 'string' }]));
-const flags = Object.fromEntries('json no-open confirm-public'.split(' ').map(key => [key, { type: 'boolean' }]));
+const flags = Object.fromEntries('json no-open confirm-public encrypted'.split(' ').map(key => [key, { type: 'boolean' }]));
 
 function openBrowser(url) {
   const windows = process.platform === 'win32';
@@ -156,6 +157,7 @@ async function main() {
   }
   if (options.title !== undefined) input.presentation = { ...input.presentation, title: options.title };
   if (options.label !== undefined) input.label = options.label;
+  if (action === 'issue' && options.encrypted) input.encrypted = true;
   if (['rotate', 'update-recipient', 'revoke-recipient', 'remove-recipient', 'links'].includes(action)) input.recipient = third;
   if (['set-version', 'remove-version'].includes(action)) input.version = third ?? null;
   if (['edit', 'snapshot', 'set-version'].includes(action) && input.revision === undefined) input.revision = (await call('inspect', { id: second })).revision;

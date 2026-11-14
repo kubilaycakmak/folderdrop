@@ -86,7 +86,7 @@ export class Network {
       const currentOrigins = () => new Set([...origins, ...(tunnel?.state.addresses ?? []), ...(tunnel?.candidate ? [tunnel.candidate] : [])]);
       server = await listen((req, res) => this.handler(req, res, {
         share: id, origins: currentOrigins(), nonce,
-        secure: plan.mode === 'public' || plan.mode === 'self-hosted'
+        secure: plan.mode === 'public' || plan.mode === 'self-hosted', encryptedOnly: plan.mode === 'public'
       }), plan.host, plan.port);
       const actual = server.address().port;
       const upstream = address(plan.host, actual);

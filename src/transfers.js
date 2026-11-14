@@ -18,6 +18,8 @@ export function parseRange(value, size) {
   return start < size && start <= end && Number.isSafeInteger(start) && Number.isSafeInteger(end) ? { start, end } : null;
 }
 
+export const MAX_ENCRYPTED_ZIP = 16 * 1024 ** 3;
+
 function transferSignal(res, task) {
   const socket = new AbortController();
   const abort = () => { if (!res.writableFinished) socket.abort(); };
@@ -102,7 +104,7 @@ export async function sendItem(req, res, deliveries, getContext, id, purpose, pa
 }
 
 const zipDate = new Date(2000, 0, 1, 12);
-export async function sendArchive(req, res, deliveries, getContext, ids) {
+export async function sendArchive(req, res, deliveries, getContext, ids, encrypter) {
   const context = getContext();
   check(Array.isArray(ids) && ids.length > 0 && ids.length <= 1000 && new Set(ids).size === ids.length, 400, 'Select up to 1,000 distinct files.');
   const valid = recheck(getContext, context);
@@ -114,9 +116,12 @@ export async function sendArchive(req, res, deliveries, getContext, ids) {
     finally { await file.handle.close(); }
     valid();
   }
+  if (encrypter) check(files.reduce((total, file) => total + file.size, 0) <= MAX_ENCRYPTED_ZIP,
+    413, 'Select less than 16 GiB for an encrypted archive.');
   const key = digest(JSON.stringify(files.map(file => [file.item.id, file.item.path, file.signature])));
   const etag = `"${key}"`;
   const resumed = req.headers['x-folderdrop-resume'];
+  check(!encrypter || (!req.headers.range && !resumed), 400, 'Retry the complete encrypted download.');
   const wantsRange = req.headers.range && (!req.headers['if-range'] || req.headers['if-range'] === etag);
   check(!wantsRange || resumed, 400, 'Resume an archive with its X-FolderDrop-Resume grant.');
   if (req.headers['if-match']) check(req.headers['if-match'] === etag || req.headers['if-match'] === '*', 412, 'The archive selection changed.');
@@ -158,14 +163,29 @@ export async function sendArchive(req, res, deliveries, getContext, ids) {
       });
     }
     const size = await new Promise(resolve => zip.end({}, resolve));
+    if (encrypter) check(size <= MAX_ENCRYPTED_ZIP, 413, 'Select less than 16 GiB for an encrypted archive.');
     signal.throwIfAborted();
     valid();
     const range = wantsRange ? parseRange(req.headers.range, size) : undefined;
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('ETag', etag);
+    if (!encrypter) {
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('ETag', etag);
+    }
     if (range === null) {
       zip.outputStream.destroy();
       return res.writeHead(416, { 'Content-Range': `bytes */${size}` }).end();
+    }
+    if (encrypter) {
+      const encrypted = await encrypter.encrypt(Readable.toWeb(zip.outputStream));
+      valid();
+      signal.throwIfAborted();
+      const total = encrypted.size(size);
+      deliveries.grant(context, 'encrypted', key);
+      task.setTotal(total);
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream',
+        'Content-Disposition': disposition('delivery.zip.age'), 'Content-Length': total });
+      await pipeline(Readable.fromWeb(encrypted), measure(task), res, { signal });
+      return;
     }
     const grant = deliveries.grant(context, 'archive', key, resumed);
     res.setHeader('X-FolderDrop-Resume', grant.id);

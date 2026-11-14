@@ -11,12 +11,14 @@ import { inspectFolder, scan } from './files.js';
 import { installTunnel, tunnelVersion } from './tunnel.js';
 import { check, Problem } from './errors.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import { Receiver } from './receiver.js';
 
 export class Application {
   constructor(directory) {
     this.store = new Store(directory);
     this.deliveries = new Deliveries(this.store);
     this.uploads = new Uploads(this.deliveries);
+    this.receiver = new Receiver();
     this.network = new Network(this.deliveries, recipientHandler(this.deliveries, this.uploads));
   }
 
@@ -38,7 +40,9 @@ export class Application {
   }
 
   links(id, recipientId) {
-    this.deliveries.recipient(this.deliveries.get(id), recipientId);
+    const share = this.deliveries.get(id);
+    const recipient = this.deliveries.recipient(share, recipientId);
+    if (share.network?.mode === 'public' && !recipient.encryption) return [];
     return this.network.status(id).addresses.map(address => `${address}/s/${id}/${recipientId}`);
   }
 
