@@ -9,4 +9,4 @@
 - Label loopback links as local-only and show mode-specific actions before starting a listener.
 - Disclose the HTTPS and Cloudflare trust boundaries in the workspace and documentation. Add no-index headers to private responses.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
-- Add CLI, stdio MCP, reproducible fixtures, browser journeys, native OS CI jobs, and production tarball verification.
+- Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.

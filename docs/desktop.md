@@ -12,7 +12,7 @@ Choose **Quit FolderDrop** in the workspace to stop the service and all active s
 
 ## Preview builds
 
-The [Desktop packages workflow](https://github.com/kubilaycakmak/folderdrop/actions/workflows/desktop.yml) provides temporary test artifacts for signed-in GitHub users when a build passes. Choose the artifact for your OS and CPU, extract the Actions download, and check the included SHA-256 before testing the platform package. A checksum verifies integrity against the workflow output. It does not establish a trusted OS publisher identity.
+Maintainers build preview packages locally on each target OS. Build one using the instructions below or use a package supplied by the maintainer for testing. Compare the download with the maintainer's SHA-256 checksum before opening it. A matching checksum checks the file's integrity. A platform signature establishes the publisher's identity.
 
 Windows and macOS preview builds use no FolderDrop publisher signature or Apple notarization. SmartScreen, Smart App Control, enterprise policy, or macOS Gatekeeper can warn about or block downloaded preview builds. The normal public desktop distribution needs trusted publisher signing on Windows and Developer ID signing plus notarization on macOS. See [Microsoft SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) and [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
