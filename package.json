@@ -38,6 +38,7 @@
     "build:desktop": "node scripts/desktop.js",
     "build:web-receiver": "node scripts/web-receiver.js",
     "verify:package": "node scripts/pack.js",
+    "verify:release": "npm run build && npm test && npm run test:browser && npm audit --omit=dev && npm run verify:package",
     "prepack": "npm run build"
   },
   "dependencies": {

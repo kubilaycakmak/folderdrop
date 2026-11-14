@@ -24,13 +24,17 @@ function address(input) {
   return url.href;
 }
 
-async function redeem(link, code, signal) {
+async function redeem(link, code, recipientKey, signal) {
   const response = await fetch(`${link}/redeem`, { method: 'POST', redirect: 'error', signal,
     headers: { 'Content-Type': 'application/json', 'X-FolderDrop-Action': '1' },
-    body: JSON.stringify({ code }) });
+    body: JSON.stringify({ code, recipientKey }) });
   if (response.status === 410) {
     await response.body?.cancel();
     throw new Problem(410, 'The one-time code was used, expired, or the sender closed the link.', 'link_closed');
+  }
+  if (response.status === 422) {
+    await response.body?.cancel();
+    throw new Problem(422, 'The decryption key does not match this delivery. Check the key and try again.', 'decryption_key_mismatch');
   }
   if (!response.ok) {
     await response.body?.cancel();
@@ -92,7 +96,8 @@ export class Receiver {
     const { decryptionKey, code, retry } = input;
     check(typeof decryptionKey === 'string' && /^AGE-SECRET-KEY-1[0-9A-Z]{58}$/.test(decryptionKey),
       400, 'Enter the decryption key separately provided by the sender.');
-    try { await identityToRecipient(decryptionKey); }
+    let recipientKey;
+    try { recipientKey = await identityToRecipient(decryptionKey); }
     catch { throw new Problem(400, 'The decryption key is invalid. Check the key from the sender.'); }
     check(typeof code === 'string' && /^[0-9A-Fa-f\s-]{20,32}$/.test(code), 400, 'Enter the one-time access code.');
     check(typeof retry === 'string' && idPattern.test(retry), 400, 'Start a new receiving session.');
@@ -116,7 +121,7 @@ export class Receiver {
       owned = true;
       stage = await fs.mkdtemp(path.join(root.path, '.folderdrop-receive-'));
       const temporary = path.join(stage, 'archive.part');
-      pending.session ??= await redeem(link, code, signal);
+      pending.session ??= await redeem(link, code, recipientKey, signal);
       const response = await fetch(`${link}/encrypted`, { signal, redirect: 'error',
         headers: { 'X-FolderDrop-Session': pending.session, 'Accept-Encoding': 'identity' } });
       if (!response.ok) {

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream';
 import QRCode from 'qrcode';
 import selfsigned from 'selfsigned';
+import { generateIdentity } from 'age-encryption';
 import { serve } from '../../src/daemon.js';
 import { BUILD, VERSION } from '../../src/version.js';
 import { zipContents } from '../helpers.js';
@@ -142,6 +143,10 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     await expect(page.getByRole('status')).toContainText('The one-time code is still required');
     expect((await app.call('inspect', { id: share.id })).recipients.find(profile => profile.id === issued.id).redeemed).toBeFalsy();
     await page.getByLabel('One-time access code').fill(issued.code);
+    await page.getByLabel('Decryption key').fill(await generateIdentity());
+    await page.getByRole('button', { name: 'Open delivery' }).click();
+    await expect(page.getByRole('alert')).toContainText('retry with the same code');
+    expect((await app.call('inspect', { id: share.id })).recipients.find(profile => profile.id === issued.id).redeemed).toBeFalsy();
     await page.getByLabel('Decryption key').fill(issued.decryptionKey);
     await page.getByRole('button', { name: 'Open delivery' }).click();
     await expect(page.getByText('ZIP verified. Save it to this device.')).toBeVisible();

@@ -280,7 +280,7 @@ export class Deliveries {
     return { share, recipient };
   }
 
-  async redeem(id, recipientId, value) {
+  async redeem(id, recipientId, value, prepare) {
     const { recipient } = this.gate(id, recipientId);
     check(!recipient.redeemed, 410, 'This access code has already been used. Ask the sender for a new code.', 'code_used');
     const code = text(value, 64, 'Access code').replace(/[\s-]+/g, '').toUpperCase();
@@ -293,10 +293,17 @@ export class Deliveries {
     this.attempts.set(recipientId, { ...limit, count: limit.count + 1 });
     try {
       check(await matchesSecret(code.match(/.{5}/g).join('-'), recipient.hash), 401, 'That code did not match.', 'code_invalid');
+      const authorized = () => {
+        const current = this.gate(id, recipientId);
+        check(!current.recipient.redeemed, 410, 'This access code has already been used. Ask the sender for a new code.', 'code_used');
+        check(current.recipient.epoch === recipient.epoch, 409, 'The code or its permissions changed. Ask the sender to confirm access.');
+        return current;
+      };
+      const initial = authorized();
+      if (prepare) await prepare(initial);
       return this.store.transaction(() => {
-        const fresh = this.gate(id, recipientId).recipient;
-        check(!fresh.redeemed, 410, 'This access code has already been used. Ask the sender for a new code.', 'code_used');
-        check(fresh.epoch === recipient.epoch, 409, 'The code changed. Enter the new code.');
+        const { share, recipient: fresh } = authorized();
+        check(!prepare || share.revision === initial.share.revision, 409, 'The delivery changed. Try the code again.', 'delivery_changed');
         const secret = token(32);
         this.store.put('recipient', { ...fresh, redeemed: now, hash: null });
         this.store.put('session', { id: fresh.id, secret: digest(secret), expires: now + SESSION_AGE, epoch: fresh.epoch });
@@ -313,8 +320,12 @@ export class Deliveries {
       session.secret === digest(secret) && session.expires > Date.now() && session.epoch === recipient.epoch,
       401, 'Enter your one-time access code.', 'authentication_required');
     check(!permission || recipient[permission], 403, 'The sender disabled this action.', 'permission_denied');
+    return { ...this.selection(share, recipient), session };
+  }
+
+  selection(share, recipient) {
     const content = this.content(share, recipient.version);
-    return { share, recipient, content, items: content.items.filter(item => recipient.items.includes(item.id)), session };
+    return { share, recipient, content, items: content.items.filter(item => recipient.items.includes(item.id)) };
   }
 
   preview(id, recipientId) {

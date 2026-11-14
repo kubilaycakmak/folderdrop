@@ -1,6 +1,6 @@
 import { Decrypter, identityToRecipient } from 'age-encryption';
+import { BROWSER_ARCHIVE_LIMIT as LIMIT } from '../src/receiving-limits.js';
 
-const LIMIT = 64 * 1024 ** 2;
 const OVERHEAD = 128 * 1024;
 const options = { credentials: 'omit', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer' };
 const select = id => document.getElementById(id);
@@ -64,14 +64,17 @@ function deliveryUrl(value) {
 function denied(result, redeeming = false) {
   if (result.status === 410) return 'This code was used, expired, or the sender closed the link.';
   if (result.status === 401 && redeeming) return 'The one-time access code did not match.';
+  if (result.status === 422 && redeeming) return 'The decryption key did not match. Check the key and retry with the same code.';
+  if (result.status === 413 && redeeming) return 'This delivery is too large for the browser. Use the same code in FolderDrop on a computer.';
+  if (result.status === 409 && redeeming) return 'The delivery changed while opening. Check with the sender and try again.';
   if (result.status === 413) return 'This delivery is too large. Ask the sender for smaller deliveries or open it in FolderDrop on a computer.';
   return 'The sender could not open this delivery. Check the link and ask the sender to verify access.';
 }
 
-async function redeem(link, accessCode, signal) {
+async function redeem(link, accessCode, recipientKey, signal) {
   const response = await fetch(`${link}/redeem`, { ...options, signal, method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-FolderDrop-Action': '1' },
-    body: JSON.stringify({ code: accessCode }) });
+    body: JSON.stringify({ code: accessCode, recipientKey }) });
   if (!response.ok) throw new Error(denied(response, true));
   const reader = response.body?.getReader();
   const chunks = [];
@@ -171,15 +174,16 @@ form.onsubmit = async event => {
   try {
     const link = deliveryUrl(delivery.value.trim());
     const privateKey = key.value.trim();
+    let recipientKey;
     try {
       if (!/^AGE-SECRET-KEY-1[0-9A-Z]{58}$/.test(privateKey)) throw new Error();
-      await identityToRecipient(privateKey);
+      recipientKey = await identityToRecipient(privateKey);
     } catch { throw new Error('Enter the full decryption key from the sender.'); }
     if (!session || session.link !== link) {
       status.textContent = 'Checking the one-time code…';
       const accessCode = code.value.trim();
       if (!/^[0-9a-f\s-]{20,32}$/i.test(accessCode)) throw new Error('Enter the one-time access code from the sender.');
-      session = { link, token: await redeem(link, accessCode, signal) };
+      session = { link, token: await redeem(link, accessCode, recipientKey, signal) };
     }
     status.textContent = 'Downloading and decrypting on this device…';
     progress.removeAttribute('value');

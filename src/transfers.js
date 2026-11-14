@@ -7,6 +7,7 @@ import { disposition, isolated, json } from './http.js';
 import { digest } from './security.js';
 import { stamp } from './files.js';
 import { createPreview, format } from './previews.js';
+import { BROWSER_ARCHIVE_LIMIT } from './receiving-limits.js';
 
 export function parseRange(value, size) {
   const parts = /^bytes=(\d*)-(\d*)$/.exec(value);
@@ -104,6 +105,21 @@ export async function sendItem(req, res, deliveries, getContext, id, purpose, pa
 }
 
 const zipDate = new Date(2000, 0, 1, 12);
+export async function checkBrowserArchive(deliveries, context, checkConnection) {
+  const release = deliveries.reading.enter();
+  try {
+    // Budget for ZIP and ZIP64 headers in addition to the stored file bytes.
+    let size = 128;
+    for (const item of context.items) {
+      checkConnection();
+      const file = await deliveries.open(context, item);
+      try { size += file.size + 256 + 2 * Buffer.byteLength(item.path); }
+      finally { await file.handle.close(); }
+      check(size <= BROWSER_ARCHIVE_LIMIT, 413, 'This delivery exceeds the browser archive limit.', 'browser_archive_limit');
+    }
+  } finally { release(); }
+}
+
 export async function sendArchive(req, res, deliveries, getContext, ids, encrypter) {
   const context = getContext();
   check(Array.isArray(ids) && ids.length > 0 && ids.length <= 1000 && new Set(ids).size === ids.length, 400, 'Select up to 1,000 distinct files.');
