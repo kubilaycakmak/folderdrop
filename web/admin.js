@@ -98,11 +98,14 @@ function bindChoose() {
   }, $('[name="path"]', form).value);
   form.onsubmit = event => {
     event.preventDefault();
+    const submit = $('[type="submit"]', form);
+    if (submit.disabled) return;
     const value = new FormData(form).get('path');
     initial = value;
-    void busy($('[type="submit"]', form), async () => {
+    const results = $('#scan-results');
+    results.innerHTML = '<p class="muted" role="status">Scanning files…</p>';
+    void busy(submit, async () => {
       const scanned = await call('scan', { path: value });
-      const results = $('#scan-results');
       results.innerHTML = scanned.files.length ? `<div class="scan-results">
         <div class="row between"><h3>Files in this folder</h3><button class="button quiet" id="select-all">Select all</button></div>
         <div class="scan-files">${scanned.files.map((file, index) => `<label class="scan-row"><input type="checkbox" data-found="${index}"><span>${e(file.relative)}</span><small>${bytes(file.size)}</small></label>`).join('')}</div>
@@ -136,7 +139,7 @@ function bindChoose() {
         $('#next').focus();
       };
       results.scrollIntoView({ block: 'nearest' });
-    }, $('#form-error'));
+    }, $('#form-error')).finally(() => { if ($('#form-error') && !$('#form-error').hidden) results.replaceChildren(); });
   };
 }
 

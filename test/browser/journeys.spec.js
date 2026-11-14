@@ -34,6 +34,7 @@ install('administrator can curate, preview, share, and revoke a restricted recip
   await page.getByRole('button', { name: 'Choose folder', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Photography', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Use this folder' }).click();
+  await expect(page.getByRole('heading', { name: 'Files in this folder' })).toBeVisible();
   await page.getByRole('button', { name: 'Select all' }).click();
   await page.getByRole('button', { name: 'Add selected files' }).click();
   await expect(page.getByText('7 selected', { exact: true })).toBeVisible();
