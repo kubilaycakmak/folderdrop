@@ -78,19 +78,41 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     await admin.getByRole('button', { name: 'Start proxy listener' }).click();
     await expect(admin.getByText('Phone links enabled for')).toBeVisible();
     upstream = (await app.call('inspect', { id: share.id })).connection.upstream;
-    const issued = await app.call('issue', { id: share.id, encrypted: true, limit: 1 });
-    const { receiverLinks } = await app.call('links', { id: share.id, recipient: issued.id });
+    await admin.getByRole('button', { name: 'Issue access code' }).click();
+    await admin.getByLabel('Recipient name').fill('Phone demo');
+    await admin.getByLabel('End-to-end encrypted ZIP').check();
+    await admin.getByRole('button', { name: 'Generate code' }).click();
+    const dialog = admin.getByRole('dialog');
+    const code = dialog.getByRole('textbox', { name: 'One-time access code' });
+    const key = dialog.getByLabel('Decryption key', { exact: true });
+    await expect(code).toBeVisible();
+    const { recipients } = await app.call('inspect', { id: share.id });
+    const [profile] = recipients;
+    const { links, receiverLinks } = await app.call('links', { id: share.id, recipient: profile.id });
+    const issued = { links, id: profile.id, code: await code.inputValue(), decryptionKey: await key.inputValue() };
     expect(new URL(receiverLinks[0]).origin).toBe(trusted);
     expect(receiverLinks[0]).not.toContain(issued.code);
     expect(receiverLinks[0]).not.toContain(issued.decryptionKey);
-    await admin.reload();
-    await admin.getByRole('button', { name: 'Link & QR' }).click();
-    const dialog = admin.getByRole('dialog');
     await expect(dialog.getByLabel('Phone or browser link')).toHaveValue(receiverLinks[0]);
     await expect(dialog.getByRole('link', { name: 'Open in phone browser' })).toHaveAttribute('href', receiverLinks[0]);
     await expect(dialog.getByRole('link', { name: /Scan to open/ })).toHaveAttribute('href', receiverLinks[0]);
     await expect(dialog.getByRole('img', { name: 'QR code for the phone or browser link' })).toHaveAttribute('src',
       await QRCode.toDataURL(receiverLinks[0], { width: 256, margin: 2 }));
+    const listener = app.network.active.get(share.id);
+    const ready = listener.status;
+    listener.status = { ...ready, connection: 'reconnecting', addresses: [] };
+    await expect(dialog.getByRole('status')).toContainText('No current recipient address');
+    await expect(dialog.getByRole('img', { name: /QR code/ })).toHaveCount(0);
+    const moved = 'https://replacement.example';
+    listener.status = { ...ready, addresses: [moved] };
+    const movedLink = `${trusted}/#${new URLSearchParams({ delivery: moved + new URL(issued.links[0]).pathname })}`;
+    await expect(dialog.getByRole('link', { name: /Scan to open/ })).toHaveAttribute('href', movedLink);
+    await expect(dialog.getByRole('img', { name: /QR code/ })).toHaveAttribute('src',
+      await QRCode.toDataURL(movedLink, { width: 256, margin: 2 }));
+    await expect(code).toHaveValue(issued.code);
+    await expect(key).toHaveValue(issued.decryptionKey);
+    listener.status = ready;
+    await expect(dialog.getByLabel('Phone or browser link')).toHaveValue(receiverLinks[0]);
     phone = await browser.newContext({
       ...devices[browserName === 'webkit' ? 'iPhone 15' : 'Pixel 7'],
       ignoreHTTPSErrors: true, acceptDownloads: true

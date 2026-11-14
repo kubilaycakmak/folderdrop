@@ -416,11 +416,19 @@ function bindShare() {
   profiles();
   versions();
   clearInterval(timer);
+  let polling = false;
   timer = setInterval(async () => {
-    if (step !== 3 || delivery?.id !== id || document.hidden) return;
+    if (polling || step !== 3 || delivery?.id !== id || document.hidden) return;
+    const currentTimer = timer;
+    polling = true;
     try {
       const fresh = await call('connection', { id });
-      if (step !== 3 || delivery?.id !== id) return;
+      if (currentTimer !== timer || step !== 3 || delivery?.id !== id) return;
+      if (fresh.connection.addresses.join('\n') !== delivery.connection.addresses.join('\n')) {
+        const dialog = $('#dialog');
+        const links = $('#recipient-links', dialog);
+        if (dialog.open && links?.dataset.delivery === id) links.dispatchEvent(new Event('connectionchange'));
+      }
       if (fresh.connection.connection === 'closed' && delivery.connection.connection !== 'closed') {
         await reload();
         return;
@@ -428,7 +436,7 @@ function bindShare() {
       delivery.connection = fresh.connection;
       delivery.transfers = fresh.transfers;
       update();
-    } catch {}
+    } catch {} finally { polling = false; }
   }, 1800);
 }
 
@@ -459,33 +467,60 @@ function profiles() {
   for (const node of $$('[data-links]', area)) node.onclick = () => void busy(node, () => credentials(node.dataset.links));
 }
 
-async function credentials(recipient, code, decryptionKey) {
-  const data = await call('links', { id: delivery.id, recipient });
+function recipientLinksMarkup(data, mode) {
+  if (!data.links.length) {
+    return '<p role="status" class="muted">No current recipient address. Start sharing or wait for the connection to come online.</p>';
+  }
   const mobile = data.receiverLinks?.[0];
-  const local = data.links.length && delivery.network?.mode === 'local';
   const qr = data.qr ? `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` : '';
+  return `${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
+    <div class="row wrap"><a class="button primary" href="${e(mobile)}" target="_blank" rel="noreferrer">Open in phone browser</a>
+    <button class="button" data-copy="#phone-link">Copy phone link</button></div>
+    <a class="phone-qr" href="${e(mobile)}" target="_blank" rel="noreferrer">${qr}<span>Scan to open ${e(new URL(mobile).host)}</span></a>` :
+    qr || '<p class="callout">This encrypted link is desktop only. To generate a phone QR, restart sharing with a trusted web receiver.</p>'}
+    ${mode === 'local' ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
+    ${data.links.map((link, index) => `<label>${mobile ? 'Desktop receiver address' : 'Recipient link'}${data.links.length > 1 ? ` ${index + 1}` : ''}
+      <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">${mobile ? 'Copy desktop address' : 'Copy link'}</button>`).join('')}`;
+}
+
+async function credentials(recipient, code, decryptionKey) {
+  const id = delivery.id;
+  const mode = delivery.network?.mode;
   const dialog = modal(code ? 'One-time access code' : 'Recipient link & QR', `<div class="form-stack">
     ${code ? `<p>Copy these credentials now. FolderDrop only shows them when they are issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
     <button class="button" data-copy="#access-code">Copy code</button>` : ''}
     ${decryptionKey ? `<label>Decryption key<input readonly id="decryption-key" value="${e(decryptionKey)}"></label>
     <button class="button" data-copy="#decryption-key">Copy decryption key</button>
     <p class="callout">Send the key separately through a trusted channel. Recipients enter it in a trusted web receiver or in their installed FolderDrop workspace.</p>` : ''}
-    ${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
-    <div class="row wrap"><a class="button primary" href="${e(mobile)}" target="_blank" rel="noreferrer">Open in phone browser</a>
-    <button class="button" data-copy="#phone-link">Copy phone link</button></div>
-    <a class="phone-qr" href="${e(mobile)}" target="_blank" rel="noreferrer">${qr}<span>Scan to open ${e(new URL(mobile).host)}</span></a>` : ''}
-    ${local ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
-    ${data.links.length ? (mobile ? '' : qr || '<p class="callout">This encrypted link is desktop only. To generate a phone QR, restart sharing with a trusted web receiver.</p>') +
-      data.links.map((link, index) => `<label>${mobile ? 'Desktop receiver address' : 'Recipient link'}${data.links.length > 1 ? ` ${index + 1}` : ''}
-      <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">${mobile ? 'Copy desktop address' : 'Copy link'}</button>`).join('') :
-      '<p class="muted">Start sharing or wait for the connection to come online, then open Link & QR.</p>'}</div>`);
-  for (const node of $$('[data-copy]', dialog)) node.onclick = () => void busy(node, async () => {
-    const input = $(node.dataset.copy, dialog);
-    input.select();
-    if (navigator.clipboard) await navigator.clipboard.writeText(input.value);
-    else if (!document.execCommand('copy')) throw new Error('Copy the selected text with your keyboard.');
-    toast('Copied.');
+    <div class="form-stack" id="recipient-links" data-delivery="${e(id)}"></div></div>`);
+  const links = $('#recipient-links', dialog);
+  let request = 0;
+  async function refreshLinks() {
+    const active = ++request;
+    const current = () => active === request && dialog.open && links.isConnected;
+    links.innerHTML = '<p role="status" class="muted">Loading recipient links…</p>';
+    try {
+      const data = await call('links', { id, recipient });
+      if (current()) links.innerHTML = recipientLinksMarkup(data, mode);
+    } catch (error) {
+      if (current()) links.innerHTML = `<p role="alert" class="error">${e(error.message)}</p>
+        <button type="button" class="button" data-retry-links>Retry loading links</button>`;
+    }
+  }
+  links.addEventListener('connectionchange', () => void refreshLinks());
+  links.parentElement.addEventListener('click', event => {
+    if (event.target.closest('[data-retry-links]')) { void refreshLinks(); return; }
+    const node = event.target.closest('[data-copy]');
+    if (!node) return;
+    void busy(node, async () => {
+      const input = $(node.dataset.copy, dialog);
+      input.select();
+      if (navigator.clipboard) await navigator.clipboard.writeText(input.value);
+      else if (!document.execCommand('copy')) throw new Error('Copy the selected text with your keyboard.');
+      toast('Copied.');
+    });
   });
+  await refreshLinks();
 }
 
 function profileForm(existing) {

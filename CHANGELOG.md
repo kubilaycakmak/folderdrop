@@ -12,5 +12,6 @@
 - Add an independently hosted browser receiver for encrypted ZIPs on phones without an app installation.
 - Make the phone receiver selectable in the sharing workspace and add a browser link on encrypted delivery pages.
 - Identify the running build in both interfaces, default Cloudflare sharing to the project web receiver in the workspace, and let phone users check the connection before redeeming a code.
+- Refresh open link and QR dialogs when a tunnel reconnects, while preserving newly issued credentials.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
 - Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.

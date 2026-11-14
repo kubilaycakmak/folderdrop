@@ -51,6 +51,6 @@ folderdrop remove DELIVERY_ID
 folderdrop shutdown
 ```
 
-A profile can set `label`, `version`, `items` (array of item IDs), `preview`, `download`, `upload`, `browseInbox`, `limit`, and `expires`. Omitted `version` uses the delivery default. Explicit `null` pins the live manifest. Omitted `items` grants the items present in that version when the profile is issued. Upload requires an inbox. Code values appear only in explicit `issue` and `rotate` results. `links` returns current addresses and a QR code, with a terminal QR when running interactively.
+A profile can set `label`, `version`, `items` (array of item IDs), `preview`, `download`, `upload`, `browseInbox`, `limit`, and `expires`. Omitted `version` uses the delivery default. Explicit `null` pins the live manifest. Omitted `items` grants the items present in that version when the profile is issued. Upload requires an inbox. Code values appear only in explicit `issue` and `rotate` results. `links` returns the current addresses. It includes a QR for ordinary browser links or for an encrypted link with a web receiver configured. When running interactively, it prints the QR in the terminal.
 
 Exit codes are `0` for success, `1` for other internal errors, `2` for input errors, `3` for missing records, `4` for invalidated or denied operations and conflicts, and `5` for service or provider errors. JSON failures include `error` and `code`.
