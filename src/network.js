@@ -8,6 +8,9 @@ import { token } from './security.js';
 import { Tunnel, tunnelVersion } from './tunnel.js';
 
 const address = (host, port) => new URL(`http://${host.includes(':') ? `[${host}]` : host}:${port}`).origin;
+export const webReceiverLink = (receiverUrl, delivery) =>
+  `${receiverUrl}#${new URLSearchParams({ delivery })}`;
+
 export async function listen(handler, host, port) {
   const server = createServer({ maxHeaderSize: 16384, requestTimeout: 120000, headersTimeout: 10000 }, handler);
   server.maxConnections = 128;
@@ -98,7 +101,7 @@ export class Network {
       server = await listen((req, res) => this.handler(req, res, {
         share: id, origins: currentOrigins(), nonce,
         secure: plan.mode === 'public' || plan.mode === 'self-hosted', encryptedOnly: plan.mode === 'public',
-        receiverOrigin: plan.receiverUrl ? new URL(plan.receiverUrl).origin : null
+        receiverUrl: plan.receiverUrl, receiverOrigin: plan.receiverUrl ? new URL(plan.receiverUrl).origin : null
       }), plan.host, plan.port);
       const actual = server.address().port;
       const upstream = address(plan.host, actual);

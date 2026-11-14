@@ -5,10 +5,22 @@ import { SESSION_AGE } from './deliveries.js';
 import { format } from './previews.js';
 import { sendArchive, sendItem } from './transfers.js';
 import { Encrypter } from 'age-encryption';
+import { webReceiverLink } from './network.js';
 
 const SESSION = 'folderdrop_recipient';
 const routes = /^\/s\/([\w-]{32})\/([\w-]{22})(?:\/(.*))?$/;
 const archiveTickets = new Map();
+
+function encryptedLanding(res, config, origin, pathname) {
+  const href = config.receiverUrl && config.origins.has(origin) ?
+    webReceiverLink(config.receiverUrl, origin + pathname).replaceAll('&', '&amp;').replaceAll('"', '&quot;') : null;
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+  const instructions = href ?
+    `<a class="button primary" href="${href}" rel="noreferrer">Open in phone browser</a>
+      <p>Before entering the key, check that the receiver address matches the one your sender gave you.</p>` :
+    '<p>For phone access, ask the sender to enable a trusted web receiver and send the phone or browser link.</p>';
+  return asset(res, 'encrypted-link.html', page => page.replace('<!-- Web receiver -->', () => instructions));
+}
 
 function encryptedOrigin(req, res, tail, config) {
   const method = tail === 'redeem' ? 'POST' : 'GET';
@@ -130,10 +142,7 @@ export function recipientHandler(deliveries, uploads) {
       const recipient = deliveries.recipient(deliveries.get(id), recipientId);
       check(!config.encryptedOnly || recipient.encryption, 404, 'This private link is unavailable.');
       if (recipient.encryption) {
-        if (req.method === 'GET' && !tail) {
-          res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
-          return await asset(res, 'encrypted-link.html');
-        }
+        if (req.method === 'GET' && !tail) return await encryptedLanding(res, config, `https://${req.headers.host}`, `/s/${id}/${recipientId}`);
         if ((tail === 'redeem' || tail === 'encrypted') && encryptedOrigin(req, res, tail, config)) return;
         if (req.method === 'POST' && tail === 'redeem') {
           if (req.headers.origin && req.headers.origin === config.receiverOrigin) {

@@ -2,7 +2,7 @@
 
 1. In the sender workspace, select files and start sharing. **Public link (Cloudflare)** requires encrypted links. For other network modes, select **End-to-end encrypted ZIP** when issuing a recipient code.
 2. Give the recipient the share link and one-time access code. Send the decryption key through a separate trusted channel. The key is shown at issuance and rotation.
-3. For phones, send the **Phone or browser link**. The recipient opens it in Safari or Chrome, enters the code and key, and saves the ZIP. For computers, the installed FolderDrop workspace also supports **Receive encrypted delivery** and can save larger ZIPs.
+3. For phones, send the **Phone or browser link** or its QR code. The recipient opens it in Safari or Chrome, enters the code and key, and saves the ZIP. If they open the raw delivery link, **Open in phone browser** leads to the same configured receiver. They should check the receiver address against the one you gave them before entering the key. For computers, the installed FolderDrop workspace also supports **Receive encrypted delivery** and can save larger ZIPs.
 
 ## Set up the web receiver for phones
 
@@ -15,7 +15,7 @@ npm run build:web-receiver
 
 Publish the three files under `dist/web-receiver/` on a dedicated HTTPS origin you control and trust. Use a host that is independent of the delivery tunnel and its operator. A reader hosted behind the same intermediary gives that intermediary the ability to substitute the code that handles the key. Avoid third-party scripts and analytics on the receiver origin. Set `X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'` as an HTTP response header. Serve `receiver.js` as JavaScript. The receiver needs no backend.
 
-In the sender's **Public link (Cloudflare)** or **Self-hosted (HTTPS reverse proxy)** network settings, enter the complete **Trusted web receiver** address before starting. For an active delivery, stop and restart with that setting. Send the generated **Phone or browser link** or its QR directly to the recipient, and send the key separately. The browser link pre-fills the delivery address in a fragment and contains neither the code nor the key. FolderDrop allows only the configured receiver origin on the encrypted download and redemption routes.
+In the sender's **Public link (Cloudflare)** or **Self-hosted (HTTPS reverse proxy)** network settings, enter the complete **Trusted web receiver** address before starting. Select **Use FolderDrop web receiver** to fill the project-hosted address if you trust the project and its host. For an active delivery, stop and restart with that setting. Send the generated **Phone or browser link** or its QR directly to the recipient, and send the key separately. The browser link pre-fills the delivery address in a fragment and contains neither the code nor the key. FolderDrop allows only the configured receiver origin on the encrypted download and redemption routes.
 
 The web receiver keeps credentials in the tab and holds a verified ZIP in memory until saved. Its limit is 64 MiB of uncompressed ZIP data. For larger deliveries, split the selected files into smaller shares or use the desktop receiver. Keep the tab open to retry a failed or cancelled download after the code has been consumed.
 

@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { Store } from './store.js';
 import { Deliveries } from './deliveries.js';
 import { Uploads } from './uploads.js';
-import { Network } from './network.js';
+import { Network, webReceiverLink } from './network.js';
 import { recipientHandler } from './recipient.js';
 import { inspectFolder, scan } from './files.js';
 import { installTunnel, tunnelVersion } from './tunnel.js';
@@ -80,7 +80,7 @@ export class Application {
         const share = this.deliveries.get(id);
         const record = this.deliveries.recipient(share, recipient);
         const receiverLinks = record.encryption && share.network?.receiverUrl ?
-          links.map(link => `${share.network.receiverUrl}#${new URLSearchParams({ delivery: link })}`) : [];
+          links.map(link => webReceiverLink(share.network.receiverUrl, link)) : [];
         const address = receiverLinks[0] ?? links[0];
         return { links, receiverLinks, qr: address ? await QRCode.toDataURL(address, { width: 256, margin: 2 }) : null };
       }
