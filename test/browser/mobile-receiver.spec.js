@@ -9,6 +9,7 @@ import { pipeline } from 'node:stream';
 import QRCode from 'qrcode';
 import selfsigned from 'selfsigned';
 import { serve } from '../../src/daemon.js';
+import { BUILD, VERSION } from '../../src/version.js';
 import { zipContents } from '../helpers.js';
 
 async function listen(server) {
@@ -35,7 +36,7 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const receiver = https.createServer(cert, async (req, res) => {
       const names = { '/': ['index.html', 'text/html'], '/receiver.js': ['receiver.js', 'text/javascript'],
         '/receiver.css': ['receiver.css', 'text/css'] };
-      const file = names[req.url];
+      const file = names[new URL(req.url, 'https://receiver.invalid').pathname];
       if (!file) return res.writeHead(404).end();
       res.writeHead(200, { 'Content-Type': file[1] }).end(await fs.readFile(path.join(assets, file[0])));
     });
@@ -64,11 +65,14 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     await app.call('stop', { id: share.id });
     admin = await browser.newPage();
     await admin.goto(service.admin.launch().url);
+    await expect(admin.locator('#workspace-build')).toHaveText(`v${VERSION} · build ${BUILD}`);
+    const receiverField = admin.getByLabel('Trusted web receiver (optional)', { exact: true });
+    await admin.getByLabel('Network mode').selectOption('public');
+    await expect(receiverField).toHaveValue('https://folderdrop-receiver.netlify.app/');
     await admin.getByLabel('Network mode').selectOption('self-hosted');
     await admin.getByLabel('External HTTPS origin').fill(publicAddress);
     await admin.getByLabel('Listener port').fill(String(port));
     await admin.getByRole('button', { name: 'Use FolderDrop web receiver' }).click();
-    const receiverField = admin.getByLabel('Trusted web receiver (optional)', { exact: true });
     await expect(receiverField).toHaveValue('https://folderdrop-receiver.netlify.app/');
     await receiverField.fill(trusted);
     await admin.getByRole('button', { name: 'Start proxy listener' }).click();
@@ -84,6 +88,7 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const dialog = admin.getByRole('dialog');
     await expect(dialog.getByLabel('Phone or browser link')).toHaveValue(receiverLinks[0]);
     await expect(dialog.getByRole('link', { name: 'Open in phone browser' })).toHaveAttribute('href', receiverLinks[0]);
+    await expect(dialog.getByRole('link', { name: /Scan to open/ })).toHaveAttribute('href', receiverLinks[0]);
     await expect(dialog.getByRole('img', { name: 'QR code for the phone or browser link' })).toHaveAttribute('src',
       await QRCode.toDataURL(receiverLinks[0], { width: 256, margin: 2 }));
     phone = await browser.newContext({
@@ -99,6 +104,7 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     await openReceiver.click();
     await expect(page.getByLabel('Delivery link')).toHaveValue(issued.links[0]);
     await expect(page.getByRole('heading', { name: 'Receive encrypted files' })).toBeVisible();
+    await expect(page.locator('#receiver-build')).toHaveText(/^v[\d.]+ · build [a-f\d]{10}$/);
     expect(new URL(page.url()).hash).toBe('');
     const ok = await page.request.fetch(link + '/redeem', { method: 'OPTIONS',
       headers: { Origin: trusted, 'Access-Control-Request-Method': 'POST' } });
@@ -110,6 +116,9 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     expect(refused.headers()['access-control-allow-origin']).toBeUndefined();
     const unopened = await page.request.get(link + '/encrypted', { headers: { Origin: trusted } });
     expect(unopened.status()).toBe(401);
+    await page.getByRole('button', { name: 'Check connection' }).click();
+    await expect(page.getByRole('status')).toContainText('The one-time code is still required');
+    expect((await app.call('inspect', { id: share.id })).recipients.find(profile => profile.id === issued.id).redeemed).toBeFalsy();
     await page.getByLabel('One-time access code').fill(issued.code);
     await page.getByLabel('Decryption key').fill(issued.decryptionKey);
     await page.getByRole('button', { name: 'Open delivery' }).click();
@@ -125,7 +134,9 @@ test('a phone browser decrypts through a trusted receiver without installing Fol
     const secondPhone = await browser.newContext({ ignoreHTTPSErrors: true });
     try {
       const fresh = await secondPhone.newPage();
+      await fresh.goto(trusted);
       await fresh.goto(receiverLinks[0]);
+      await expect(fresh.getByLabel('Delivery link')).toHaveValue(link);
       await fresh.getByLabel('One-time access code').fill(issued.code);
       await fresh.getByLabel('Decryption key').fill(issued.decryptionKey);
       await fresh.getByRole('button', { name: 'Open delivery' }).click();

@@ -74,7 +74,7 @@
   .brand-mark { display: grid; place-items: center; width: 2.16rem; height: 2.16rem; background: #e8edc7; color: #203027; border-radius: .58rem; }
   .brand-mark .icon { width: 1.37rem; height: 1.37rem; }
   .topbar-right { display: inline-flex; align-items: center; gap: .6rem; color: #dce7dc; font-size: .83rem; font-weight: 600; }
-  .connection-dot { width: .48rem; height: .48rem; background: #8edcae; border-radius: 50%; box-shadow: 0 0 0 .22rem #8edcae25; }
+  #workspace-build { padding: .18rem .45rem; border: 1px solid #64786b; border-radius: .35rem; }
   .workspace { display: grid; grid-template-columns: minmax(214px, 245px) minmax(0, 1fr); min-height: calc(100vh - 66px); }
   .sidebar { display: flex; flex-direction: column; padding: 1.55rem 1.1rem; border-right: 1px solid var(--line); background: #eff0e9; }
   .sidebar-heading { display: flex; align-items: center; justify-content: space-between; color: var(--strong); font-weight: 720; padding-left: .25rem; margin-bottom: .65rem; }
@@ -165,6 +165,7 @@
   .dialog-head h2 { overflow-wrap: anywhere; padding-top: .3rem; }
   dialog > div > p + .row { margin-top: .85rem; }
   .qr { border: 1px solid var(--line); border-radius: .4rem; }
+  .phone-qr { display: grid; justify-items: start; gap: .3rem; width: fit-content; }
   .diagnostics { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: .5rem 1rem; }
   .diagnostics dt { font-weight: 650; }
   .diagnostics dd { margin: 0; overflow-wrap: anywhere; }

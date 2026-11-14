@@ -10,7 +10,7 @@ import { client, discover, request, serve } from '../src/daemon.js';
 import { dataDirectory } from '../src/store.js';
 import { check, Problem, problem } from '../src/errors.js';
 import { integer } from '../src/model.js';
-import { VERSION } from '../src/version.js';
+import { BUILD, VERSION } from '../src/version.js';
 
 const help = `FolderDrop ${VERSION}
 Private, curated file delivery from your computer.
@@ -112,7 +112,7 @@ async function main() {
   } catch (error) { throw new Problem(400, error.message); }
   const options = args.values;
   if (options.help) { console.log(help); return; }
-  if (options.version) { console.log(options.json ? JSON.stringify({ version: VERSION }) : VERSION); return; }
+  if (options.version) { console.log(options.json ? JSON.stringify({ version: VERSION, build: BUILD }) : VERSION); return; }
   const [first, second, third, fourth] = args.positionals;
   check(!fourth, 400, 'Too many positional arguments. Run folderdrop --help.');
   const directory = dataDirectory(options['data-dir']);
@@ -133,6 +133,10 @@ async function main() {
     check((await stat(initial).catch(() => null))?.isDirectory(), 400, 'Pass an existing folder or run folderdrop --help.');
   }
   const runtime = await client(directory, adminPort);
+  if (action === 'launch' && process.env.FOLDERDROP_DESKTOP_BUILD_CHECK === '1') {
+    check(runtime.build === BUILD, 409,
+      'Another FolderDrop build is still running. Use Quit FolderDrop in the open workspace, then open this executable again.', 'build_mismatch');
+  }
   const call = (operation, input) => request(runtime, operation, input);
   if (action === 'menu') {
     const terminal = createInterface({ input: process.stdin, output: process.stdout });

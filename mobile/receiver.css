@@ -19,6 +19,8 @@ input { width: 100%; border: 1px solid #879b8b; color: inherit; background: #fff
 button, #save { background: var(--green); color: #fff; font-weight: 650; text-align: center; cursor: pointer; border: 1px solid transparent; }
 button:disabled { opacity: .65; cursor: default; }
 #cancel { background: #fff; color: var(--green); border-color: var(--green); }
+#check-connection { justify-self: start; background: #fff; color: var(--green); border-color: var(--green); }
+#receiver-build { margin-left: .5rem; font-family: monospace; font-size: .72rem; font-weight: 500; }
 #save { display: block; text-decoration: none; margin-top: .75rem; }
 :focus-visible { outline: 3px solid #298b55; outline-offset: 3px; }
 .note, #status { color: #3d5446; margin: 0; }

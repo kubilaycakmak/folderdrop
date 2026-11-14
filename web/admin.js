@@ -295,7 +295,7 @@ function share() {
     <label class="full" id="external-field" hidden>External HTTPS origin<input type="url" id="external" placeholder="https://deliveries.example.com"></label>
     <div class="full form-stack" id="receiver-field" hidden><label for="receiver-url">Trusted web receiver (optional)</label>
     <input type="url" id="receiver-url" maxlength="512" placeholder="https://receive.example.com/" aria-describedby="receiver-help">
-    <small id="receiver-help" class="muted">Set a trusted HTTPS receiver to create a phone link and QR code. Phone users enter the key on that site.</small>
+    <small id="receiver-help" class="muted">This HTTPS receiver handles decryption in the browser. Leave the field blank for desktop-only receiving.</small>
     <div class="row"><button type="button" class="button" id="use-hosted-receiver">Use FolderDrop web receiver</button></div></div>
     <label class="check-line full" id="public-field" hidden><input id="confirm-public" type="checkbox"> Start an internet-facing Cloudflare tunnel for this delivery.</label>
     <div class="full row wrap" id="provider-field" hidden><span class="muted" id="provider-status" role="status"></span>
@@ -339,7 +339,11 @@ function bindShare() {
     $('#port').value = delivery.network?.port || '';
     $('#external').value = delivery.network?.external ?? '';
     const receiver = $('#receiver-url');
-    receiver.value = delivery.network?.receiverUrl ?? '';
+    const receiverByMode = {
+      public: mode.value === 'public' ? delivery.network.receiverUrl || hostedReceiver : hostedReceiver,
+      'self-hosted': mode.value === 'self-hosted' ? delivery.network.receiverUrl ?? '' : ''
+    };
+    let previousMode;
     $('#use-hosted-receiver').onclick = () => { receiver.value = hostedReceiver; receiver.focus(); };
     const install = $('#install-provider');
     const providerStatus = $('#provider-status');
@@ -359,6 +363,9 @@ function bindShare() {
       }
     }, $('#form-error'));
     function modeChanged() {
+      if (previousMode) receiverByMode[previousMode] = receiver.value;
+      receiver.value = receiverByMode[mode.value] ?? '';
+      previousMode = mode.value;
       const binding = ['lan', 'self-hosted'].includes(mode.value);
       $('#host-field').hidden = !binding;
       $('#port-field').hidden = !binding;
@@ -456,6 +463,7 @@ async function credentials(recipient, code, decryptionKey) {
   const data = await call('links', { id: delivery.id, recipient });
   const mobile = data.receiverLinks?.[0];
   const local = data.links.length && delivery.network?.mode === 'local';
+  const qr = data.qr ? `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` : '';
   const dialog = modal(code ? 'One-time access code' : 'Recipient link & QR', `<div class="form-stack">
     ${code ? `<p>Copy these credentials now. FolderDrop only shows them when they are issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
     <button class="button" data-copy="#access-code">Copy code</button>` : ''}
@@ -464,9 +472,10 @@ async function credentials(recipient, code, decryptionKey) {
     <p class="callout">Send the key separately through a trusted channel. Recipients enter it in a trusted web receiver or in their installed FolderDrop workspace.</p>` : ''}
     ${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
     <div class="row wrap"><a class="button primary" href="${e(mobile)}" target="_blank" rel="noreferrer">Open in phone browser</a>
-    <button class="button" data-copy="#phone-link">Copy phone link</button></div>` : ''}
+    <button class="button" data-copy="#phone-link">Copy phone link</button></div>
+    <a class="phone-qr" href="${e(mobile)}" target="_blank" rel="noreferrer">${qr}<span>Scan to open ${e(new URL(mobile).host)}</span></a>` : ''}
     ${local ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
-    ${data.links.length ? `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` +
+    ${data.links.length ? (mobile ? '' : qr || '<p class="callout">This encrypted link is desktop only. To generate a phone QR, restart sharing with a trusted web receiver.</p>') +
       data.links.map((link, index) => `<label>${mobile ? 'Desktop receiver address' : 'Recipient link'}${data.links.length > 1 ? ` ${index + 1}` : ''}
       <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">${mobile ? 'Copy desktop address' : 'Copy link'}</button>`).join('') :
       '<p class="muted">Start sharing or wait for the connection to come online, then open Link & QR.</p>'}</div>`);
@@ -636,7 +645,8 @@ $('#quit').onclick = event => void busy(event.currentTarget, async () => {
 });
 $('#diagnostics').onclick = event => void busy(event.currentTarget, async () => {
   const info = await call('diagnostics');
-  modal('Diagnostics', `<dl class="diagnostics"><dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
+  modal('Diagnostics', `<dl class="diagnostics"><dt>Version</dt><dd>v${e(info.version)} · build ${e(info.build)}</dd>
+    <dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
     <dt>Data directory</dt><dd><code>${e(info.dataDirectory)}</code></dd>
     <dt>Cloudflare provider</dt><dd>${e(info.tunnel.version ?? info.tunnel.message)}</dd></dl>`);
 });

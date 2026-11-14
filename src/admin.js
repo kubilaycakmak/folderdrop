@@ -2,6 +2,7 @@ import { asset, body, fail, headers, json, origin } from './http.js';
 import { check } from './errors.js';
 import { cookie, digest, equal, setCookie, token } from './security.js';
 import { recipientAPI } from './recipient.js';
+import { BUILD, VERSION } from './version.js';
 
 const ADMIN = 'folderdrop_admin';
 const SHIFT = 12 * 60 * 60 * 1000;
@@ -41,7 +42,8 @@ export class Admin {
       const url = new URL(req.url, this.address);
       const assets = publicAssets.exec(url.pathname);
       if (req.method === 'GET' && assets) return await asset(res, assets[1]);
-      if (req.method === 'GET' && url.pathname === '/') return await asset(res, 'admin.html');
+      if (req.method === 'GET' && url.pathname === '/') return await asset(res, 'admin.html', page =>
+        page.replaceAll('@@BUILD@@', BUILD).replace('@@VERSION@@', VERSION));
       if (req.method !== 'GET' && req.method !== 'HEAD') origin(req, allowed);
       if (req.method === 'POST' && url.pathname === '/bootstrap') {
         const input = await body(req, 4096);

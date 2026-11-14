@@ -7,11 +7,11 @@
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https:; base-uri 'none'; form-action 'none'">
   <title>Receive files · FolderDrop</title>
-  <link rel="stylesheet" href="./receiver.css">
-  <script type="module" src="./receiver.js"></script>
+  <link rel="stylesheet" href="./receiver.css?build=@@BUILD@@">
+  <script type="module" src="./receiver.js?build=@@BUILD@@"></script>
 </head>
 <body>
-  <header>FolderDrop</header>
+  <header>FolderDrop <span id="receiver-build">v@@VERSION@@ · build @@BUILD@@</span></header>
   <main>
     <h1>Receive encrypted files</h1>
     <p>Open a delivery from your browser. FolderDrop decrypts the ZIP on this device.</p>
@@ -19,6 +19,7 @@
       <label>Delivery link
         <input name="delivery" type="url" required maxlength="512" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
       </label>
+      <button id="check-connection" type="button" disabled>Check connection</button>
       <label>One-time access code
         <input name="code" required maxlength="32" autocomplete="off" autocapitalize="characters" spellcheck="false">
       </label>
