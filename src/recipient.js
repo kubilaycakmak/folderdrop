@@ -10,6 +10,24 @@ const SESSION = 'folderdrop_recipient';
 const routes = /^\/s\/([\w-]{32})\/([\w-]{22})(?:\/(.*))?$/;
 const archiveTickets = new Map();
 
+function encryptedOrigin(req, res, tail, config) {
+  const method = tail === 'redeem' ? 'POST' : 'GET';
+  const crossOrigin = req.headers.origin && req.headers.origin === config.receiverOrigin;
+  if (req.headers.origin) {
+    check(crossOrigin || config.origins.has(req.headers.origin), 403, 'This browser receiver is not allowed.');
+  }
+  if (crossOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', config.receiverOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method !== 'OPTIONS') return false;
+  check(crossOrigin && req.headers['access-control-request-method'] === method, 403, 'This browser receiver is not allowed.');
+  res.setHeader('Access-Control-Allow-Methods', method);
+  res.setHeader('Access-Control-Allow-Headers', tail === 'redeem' ? 'Content-Type, X-FolderDrop-Action' : 'X-FolderDrop-Session');
+  res.writeHead(204).end();
+  return true;
+}
+
 export async function manifest(deliveries, getContext) {
   const release = deliveries.reading.enter();
   try {
@@ -116,8 +134,11 @@ export function recipientHandler(deliveries, uploads) {
           res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
           return await asset(res, 'encrypted-link.html');
         }
+        if ((tail === 'redeem' || tail === 'encrypted') && encryptedOrigin(req, res, tail, config)) return;
         if (req.method === 'POST' && tail === 'redeem') {
-          origin(req, config.origins);
+          if (req.headers.origin && req.headers.origin === config.receiverOrigin) {
+            check(req.headers['x-folderdrop-action'] === '1', 403, 'This browser receiver is not allowed.');
+          } else origin(req, config.origins);
           const input = await body(req, 4096);
           const secret = await deliveries.redeem(id, recipientId, input.code);
           return json(res, { session: secret });
@@ -126,11 +147,12 @@ export function recipientHandler(deliveries, uploads) {
           const getEncrypted = () => deliveries.context(id, recipientId, req.headers['x-folderdrop-session'], 'download');
           const context = getEncrypted();
           check(context.items.length, 404, 'There are no files available for this recipient.');
+          res.setHeader('Cache-Control', 'private, no-store, no-transform');
           const encrypter = new Encrypter();
           encrypter.addRecipient(context.recipient.encryption);
           return await sendArchive(req, res, deliveries, getEncrypted, context.items.map(item => item.id), encrypter);
         }
-        check(false, 404, 'Encrypted links deliver files through the local FolderDrop recipient.');
+        check(false, 404, 'Open this encrypted delivery in the trusted web receiver or the FolderDrop desktop app.');
       }
       const getContext = permission => deliveries.context(id, recipientId, cookie(req, SESSION), permission);
       if (req.method === 'GET' && !tail) return await asset(res, 'recipient.html');

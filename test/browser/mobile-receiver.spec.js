@@ -1,0 +1,119 @@
+import { test, expect, devices } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
+import { pipeline } from 'node:stream';
+import selfsigned from 'selfsigned';
+import { serve } from '../../src/daemon.js';
+import { zipContents } from '../helpers.js';
+
+async function listen(server) {
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return `https://127.0.0.1:${server.address().port}`;
+}
+
+test('a phone browser decrypts through a trusted receiver without installing FolderDrop', async ({ browser, browserName }) => {
+  const temporary = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()), 'folderdrop-web-receive-'));
+  let service;
+  const servers = [];
+  let phone;
+  try {
+    const assets = path.join(temporary, 'receiver');
+    const source = path.join(temporary, 'source');
+    await fs.mkdir(source);
+    await fs.writeFile(path.join(source, 'mobile.txt'), 'Confidential sample for the mobile ZIP test.');
+    execFileSync(process.execPath, ['scripts/web-receiver.js', assets], { stdio: 'ignore', timeout: 15000 });
+    const tls = await selfsigned.generate([{ name: 'commonName', value: 'FolderDrop browser test' }], {
+      extensions: [{ name: 'subjectAltName', altNames: [{ type: 7, ip: '127.0.0.1' }] }]
+    });
+    const cert = { key: tls.private, cert: tls.cert };
+    const receiver = https.createServer(cert, async (req, res) => {
+      const names = { '/': ['index.html', 'text/html'], '/receiver.js': ['receiver.js', 'text/javascript'],
+        '/receiver.css': ['receiver.css', 'text/css'] };
+      const file = names[req.url];
+      if (!file) return res.writeHead(404).end();
+      res.writeHead(200, { 'Content-Type': file[1] }).end(await fs.readFile(path.join(assets, file[0])));
+    });
+    servers.push(receiver);
+    const trusted = await listen(receiver);
+    let upstream;
+    const edgeCapture = [];
+    const edge = https.createServer(cert, (req, res) => {
+      const record = { headers: req.headers, url: req.url, body: [], method: req.method };
+      edgeCapture.push(record);
+      req.on('data', chunk => record.body.push(chunk));
+      const toSender = http.request(new URL(req.url, upstream), { method: req.method, headers: req.headers }, reply => {
+        res.writeHead(reply.statusCode, reply.headers);
+        pipeline(reply, res, () => {});
+      });
+      toSender.on('error', () => { if (!res.headersSent) res.writeHead(502).end(); });
+      pipeline(req, toSender, () => {});
+    });
+    servers.push(edge);
+    const publicAddress = await listen(edge);
+    service = await serve(path.join(temporary, 'state'), 0);
+    const { app } = service;
+    const share = await app.call('create', { roots: [{ label: 'Test', path: source }], items: [{ root: 0, relative: 'mobile.txt' }] });
+    const temporaryListener = await app.call('start', { id: share.id, mode: 'local' });
+    const port = Number(new URL(temporaryListener.connection.addresses[0]).port);
+    await app.call('stop', { id: share.id });
+    const listening = await app.call('start', { id: share.id, mode: 'self-hosted', external: publicAddress, port, receiverUrl: trusted });
+    upstream = listening.connection.upstream;
+    const issued = await app.call('issue', { id: share.id, encrypted: true, limit: 1 });
+    const { receiverLinks } = await app.call('links', { id: share.id, recipient: issued.id });
+    expect(new URL(receiverLinks[0]).origin).toBe(trusted);
+    expect(receiverLinks[0]).not.toContain(issued.code);
+    expect(receiverLinks[0]).not.toContain(issued.decryptionKey);
+    phone = await browser.newContext({
+      ...devices[browserName === 'webkit' ? 'iPhone 15' : 'Pixel 7'],
+      ignoreHTTPSErrors: true, acceptDownloads: true
+    });
+    const page = await phone.newPage();
+    await page.goto(receiverLinks[0]);
+    await expect(page.getByLabel('Delivery link')).toHaveValue(issued.links[0]);
+    await expect(page.getByRole('heading', { name: 'Receive encrypted files' })).toBeVisible();
+    expect(new URL(page.url()).hash).toBe('');
+    const [link] = issued.links;
+    const ok = await page.request.fetch(link + '/redeem', { method: 'OPTIONS',
+      headers: { Origin: trusted, 'Access-Control-Request-Method': 'POST' } });
+    expect(ok.status()).toBe(204);
+    expect(ok.headers()['access-control-allow-origin']).toBe(trusted);
+    const refused = await page.request.fetch(link + '/redeem', { method: 'OPTIONS',
+      headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'POST' } });
+    expect(refused.status()).toBe(403);
+    expect(refused.headers()['access-control-allow-origin']).toBeUndefined();
+    const unopened = await page.request.get(link + '/encrypted', { headers: { Origin: trusted } });
+    expect(unopened.status()).toBe(401);
+    await page.getByLabel('One-time access code').fill(issued.code);
+    await page.getByLabel('Decryption key').fill(issued.decryptionKey);
+    await page.getByRole('button', { name: 'Open delivery' }).click();
+    await expect(page.getByText('ZIP verified. Save it to this device.')).toBeVisible();
+    const downloading = page.waitForEvent('download');
+    await page.getByRole('link', { name: 'Save ZIP' }).click();
+    const retrieved = await zipContents(await fs.readFile(await (await downloading).path()));
+    expect(retrieved.get('Test/mobile.txt')).toBe('Confidential sample for the mobile ZIP test.');
+    expect(edgeCapture.some(entry => entry.headers.origin === trusted && entry.method === 'GET' && entry.url.endsWith('/encrypted'))).toBe(true);
+    expect(edgeCapture.every(entry =>
+      ![entry.url, JSON.stringify(entry.headers), Buffer.concat(entry.body).toString()].some(value => value.includes(issued.decryptionKey))
+    )).toBe(true);
+    const secondPhone = await browser.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const fresh = await secondPhone.newPage();
+      await fresh.goto(receiverLinks[0]);
+      await fresh.getByLabel('One-time access code').fill(issued.code);
+      await fresh.getByLabel('Decryption key').fill(issued.decryptionKey);
+      await fresh.getByRole('button', { name: 'Open delivery' }).click();
+      await expect(fresh.getByRole('alert')).toContainText('This code was used');
+    } finally { await secondPhone.close(); }
+  } finally {
+    await phone?.close();
+    for (const server of servers) {
+      await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+    }
+    await service?.close();
+    await fs.rm(temporary, { recursive: true, force: true, maxRetries: 6 });
+  }
+});

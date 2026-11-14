@@ -292,6 +292,8 @@ function share() {
     <label id="host-field" hidden>Interface address<input id="host" placeholder="0.0.0.0"></label>
     <label id="port-field" hidden>Listener port<input type="number" id="port" min="1" max="65535" placeholder="Automatic"></label>
     <label class="full" id="external-field" hidden>External HTTPS origin<input type="url" id="external" placeholder="https://deliveries.example.com"></label>
+    <label class="full" id="receiver-field" hidden>Trusted web receiver (optional)<input type="url" id="receiver-url" maxlength="512"
+    placeholder="https://receive.example.com/" aria-describedby="receiver-help"><small id="receiver-help" class="muted">Use an HTTPS site you trust to serve the FolderDrop web receiver. Send that address directly to phone users.</small></label>
     <label class="check-line full" id="public-field" hidden><input id="confirm-public" type="checkbox"> Start an internet-facing Cloudflare tunnel for this delivery.</label>
     <div class="full row wrap" id="provider-field" hidden><span class="muted" id="provider-status" role="status"></span>
     <button type="button" class="button" id="install-provider" hidden>Install verified Cloudflare connector</button></div>
@@ -329,6 +331,7 @@ function bindShare() {
     $('#host').value = delivery.network?.host ?? '';
     $('#port').value = delivery.network?.port || '';
     $('#external').value = delivery.network?.external ?? '';
+    $('#receiver-url').value = delivery.network?.receiverUrl ?? '';
     const install = $('#install-provider');
     const providerStatus = $('#provider-status');
     async function provider() {
@@ -351,13 +354,14 @@ function bindShare() {
       $('#host-field').hidden = !binding;
       $('#port-field').hidden = !binding;
       $('#external-field').hidden = mode.value !== 'self-hosted';
+      $('#receiver-field').hidden = !['public', 'self-hosted'].includes(mode.value);
       $('#public-field').hidden = mode.value !== 'public';
       $('#provider-field').hidden = mode.value !== 'public';
       if (mode.value === 'public') void busy(null, provider, $('#form-error'));
       const options = {
         local: ['Starts a 127.0.0.1 address that opens only on this computer.', 'Start local sharing'],
         lan: ['Creates links for devices on the same local network. People who can observe that network may read this HTTP traffic.', 'Start LAN sharing'],
-        public: ['Creates a temporary HTTPS address for encrypted ZIP downloads. Cloudflare can see access codes and traffic metadata. Only recipients with the separate key can read the files.', 'Start public tunnel'],
+        public: ['Creates a temporary HTTPS address for encrypted ZIP downloads. Cloudflare can see access codes and traffic metadata. Use a separate trusted web receiver for phones.', 'Start public tunnel'],
         'self-hosted': ['Starts a listener for your HTTPS reverse proxy at the external address you configure.', 'Start proxy listener']
       };
       const [description, action] = options[mode.value];
@@ -370,7 +374,8 @@ function bindShare() {
       event.preventDefault();
       return busy($('#start-sharing'), async () => {
         await call('start', { id, mode: mode.value, host: $('#host').value.trim(), port: $('#port').valueAsNumber || undefined,
-          external: $('#external').value.trim(), confirmPublic: $('#confirm-public').checked });
+          external: $('#external').value.trim(), receiverUrl: $('#receiver-field').hidden ? undefined : $('#receiver-url').value.trim(),
+          confirmPublic: $('#confirm-public').checked });
         await reload();
       }, $('#form-error'));
     };
@@ -440,17 +445,20 @@ function profiles() {
 
 async function credentials(recipient, code, decryptionKey) {
   const data = await call('links', { id: delivery.id, recipient });
+  const mobile = data.receiverLinks?.[0];
   const local = data.links.length && delivery.network?.mode === 'local';
   const dialog = modal(code ? 'One-time access code' : 'Recipient link & QR', `<div class="form-stack">
     ${code ? `<p>Copy these credentials now. FolderDrop only shows them when they are issued.</p><label>One-time access code<input readonly id="access-code" value="${e(code)}"></label>
     <button class="button" data-copy="#access-code">Copy code</button>` : ''}
     ${decryptionKey ? `<label>Decryption key<input readonly id="decryption-key" value="${e(decryptionKey)}"></label>
     <button class="button" data-copy="#decryption-key">Copy decryption key</button>
-    <p class="callout">Send the key separately through a trusted channel. The recipient enters it only in their installed FolderDrop workspace.</p>` : ''}
+    <p class="callout">Send the key separately through a trusted channel. Recipients enter it in a trusted web receiver or in their installed FolderDrop workspace.</p>` : ''}
+    ${mobile ? `<label>Phone or browser link<input readonly id="phone-link" value="${e(mobile)}"></label>
+    <button class="button" data-copy="#phone-link">Copy phone link</button>` : ''}
     ${local ? '<p class="callout">This link only opens on this computer. To share outside your network, stop local sharing and select Public link (Cloudflare).</p>' : ''}
     ${data.links.length ? data.links.map((link, index) => `<label>Recipient link${data.links.length > 1 ? ` ${index + 1}` : ''}
       <input readonly id="link-${index}" value="${e(link)}"></label><button class="button" data-copy="#link-${index}">Copy link</button>`).join('') +
-      `<img class="qr" src="${e(data.qr)}" alt="QR code for the first recipient link" width="148" height="148">` :
+      `<img class="qr" src="${e(data.qr)}" alt="${mobile ? 'QR code for the phone or browser link' : 'QR code for the first recipient link'}" width="148" height="148">` :
       '<p class="muted">Start sharing or wait for the connection to come online, then open Link & QR.</p>'}</div>`);
   for (const node of $$('[data-copy]', dialog)) node.onclick = () => void busy(node, async () => {
     const input = $(node.dataset.copy, dialog);

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https:; base-uri 'none'; form-action 'none'">
+  <title>Receive files · FolderDrop</title>
+  <link rel="stylesheet" href="./receiver.css">
+  <script type="module" src="./receiver.js"></script>
+</head>
+<body>
+  <header>FolderDrop</header>
+  <main>
+    <h1>Receive encrypted files</h1>
+    <p>Open a delivery from your browser. FolderDrop decrypts the ZIP on this device.</p>
+    <form id="receive">
+      <label>Delivery link
+        <input name="delivery" type="url" required maxlength="512" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…">
+      </label>
+      <label>One-time access code
+        <input name="code" required maxlength="32" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </label>
+      <label>Decryption key
+        <input name="key" type="password" required maxlength="74" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="note">Use the key the sender gave you separately. Browser downloads support ZIPs up to 64 MiB.</p>
+      <button id="decrypt" type="submit" disabled>Open delivery</button>
+      <button id="cancel" type="button" hidden>Cancel</button>
+      <progress id="progress" max="1" aria-label="Download progress" hidden></progress>
+      <p id="status" role="status"></p>
+      <p id="error" role="alert" tabindex="-1" hidden></p>
+    </form>
+    <a id="save" download="FolderDrop delivery.zip" hidden>Save ZIP</a>
+    <noscript>This trusted receiver needs JavaScript enabled to decrypt files on your device.</noscript>
+  </main>
+</body>
+</html>

@@ -42,7 +42,18 @@ export function settings(input) {
       400, 'Enter an HTTPS external origin such as https://deliveries.example.com.');
     external = url.origin;
   }
-  return { mode, host, port, external };
+  let receiverUrl = null;
+  if (input.receiverUrl) {
+    check(typeof input.receiverUrl === 'string' && input.receiverUrl.length <= 512, 400, 'The web receiver address is invalid.');
+    let url;
+    try { url = new URL(input.receiverUrl); } catch {}
+    check(['public', 'self-hosted'].includes(mode) && url?.protocol === 'https:' &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      !/(?:^|\.)trycloudflare\.com\.?$/i.test(url.hostname) && url.origin !== external,
+    400, 'Enter a trusted HTTPS web receiver address on an origin separate from the delivery.');
+    receiverUrl = url.href;
+  }
+  return { mode, host, port, external, receiverUrl };
 }
 
 function networkAddresses(host, port) {
@@ -86,7 +97,8 @@ export class Network {
       const currentOrigins = () => new Set([...origins, ...(tunnel?.state.addresses ?? []), ...(tunnel?.candidate ? [tunnel.candidate] : [])]);
       server = await listen((req, res) => this.handler(req, res, {
         share: id, origins: currentOrigins(), nonce,
-        secure: plan.mode === 'public' || plan.mode === 'self-hosted', encryptedOnly: plan.mode === 'public'
+        secure: plan.mode === 'public' || plan.mode === 'self-hosted', encryptedOnly: plan.mode === 'public',
+        receiverOrigin: plan.receiverUrl ? new URL(plan.receiverUrl).origin : null
       }), plan.host, plan.port);
       const actual = server.address().port;
       const upstream = address(plan.host, actual);
