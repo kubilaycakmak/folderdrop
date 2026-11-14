@@ -1,0 +1,68 @@
+{
+  "name": "@kubilaycakmak/folderdrop",
+  "version": "1.0.0",
+  "description": "Curated, private file deliveries from your own computer",
+  "type": "module",
+  "license": "MIT",
+  "author": "FolderDrop contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kubilaycakmak/folderdrop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kubilaycakmak/folderdrop/issues"
+  },
+  "homepage": "https://github.com/kubilaycakmak/folderdrop#readme",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "bin": {
+    "folderdrop": "bin/folderdrop.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "web/",
+    "demo/",
+    "docs/",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md"
+  ],
+  "scripts": {
+    "dev": "node bin/folderdrop.js serve",
+    "demo": "node demo/create.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "playwright test",
+    "build": "node scripts/check.js",
+    "verify:package": "node scripts/pack.js",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@napi-rs/canvas": "1.1.1",
+    "file-type": "22.3.0",
+    "mediabunny": "1.66.0",
+    "mime-types": "3.0.2",
+    "pdfjs-dist": "6.5.438",
+    "qrcode": "1.5.4",
+    "sharp": "0.35.5",
+    "yazl": "3.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@playwright/test": "1.65.1",
+    "selfsigned": "5.5.0",
+    "yauzl": "3.3.1"
+  },
+  "keywords": [
+    "file-sharing",
+    "delivery",
+    "cli",
+    "mcp",
+    "self-hosted"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

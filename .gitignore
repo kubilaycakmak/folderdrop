@@ -1,0 +1,9 @@
+node_modules/
+playwright-report/
+test-results/
+*.tgz
+*.sqlite*
+.folderdrop-demo/
+.env
+.env.*
+runtime.json

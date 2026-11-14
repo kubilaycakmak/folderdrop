@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FolderDrop · Private delivery</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module" src="/assets/recipient.js"></script>
+</head>
+<body class="recipient">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar recipient-bar">
+    <span class="brand"><span class="brand-mark" data-icon="drop"></span>FolderDrop</span>
+    <span class="topbar-right"><span data-icon="lock"></span> Private delivery</span>
+  </header>
+  <main id="main" class="delivery" tabindex="-1" aria-busy="true"><p class="muted">Opening delivery…</p></main>
+  <div role="status" class="toast" id="toast" hidden></div>
+  <dialog id="dialog"><div id="dialog-content"></div></dialog>
+  <iframe name="folderdrop-download" title="Download transport" hidden></iframe>
+</body>
+</html>

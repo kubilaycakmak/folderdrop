@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>FolderDrop · Workspace</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module" src="/assets/admin.js"></script>
+</head>
+<body class="admin">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="FolderDrop workspace"><span class="brand-mark" data-icon="drop"></span>FolderDrop</a>
+    <div class="topbar-right"><span class="connection-dot"></span> Local workspace</div>
+  </header>
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-heading"><span>Workspace</span><button class="icon-button" id="refresh" aria-label="Refresh deliveries" data-icon="refresh"></button></div>
+      <button id="new" class="button primary wide"><span data-icon="plus"></span> New delivery</button>
+      <nav id="deliveries" aria-label="Deliveries"><p class="muted">Loading deliveries…</p></nav>
+      <button id="diagnostics" class="button quiet side-bottom"><span data-icon="settings"></span> Diagnostics</button>
+    </aside>
+    <main id="main" class="main" tabindex="-1" aria-busy="true"><p class="muted">Opening your workspace…</p></main>
+  </div>
+  <div role="status" class="toast" id="toast" hidden></div>
+  <dialog id="dialog"><div id="dialog-content"></div></dialog>
+</body>
+</html>
