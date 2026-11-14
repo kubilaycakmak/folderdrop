@@ -56,7 +56,7 @@ folderdrop links DELIVERY_ID RECIPIENT_ID
 folderdrop stop DELIVERY_ID
 ```
 
-In a checkout, run the same commands with `node bin/folderdrop.js <command>`. The npm name is reserved in project configuration for a future release. Verify the npm package locally with `npm run verify:package`.
+In a checkout, run the same commands with `node bin/folderdrop.js <command>`. The project uses `@kubilaycakmak/folderdrop` as its package name. The package is currently unpublished. Verify a local tarball with `npm run verify:package`.
 
 | Capability | Behavior |
 | --- | --- |
