@@ -2,6 +2,8 @@
 
 Desktop builds include Node.js and the same FolderDrop CLI, filesystem services, and browser workspace. Senders launch the app and use their default browser. Recipients open their link in a browser and need no app.
 
+Choose **Quit FolderDrop** in the workspace to stop the service and all active sharing. Closing the browser tab leaves the service running.
+
 | Platform | Package | Launch after installation |
 | --- | --- | --- |
 | Windows x64 | ZIP | Extract the entire ZIP, then double-click `FolderDrop.exe` |

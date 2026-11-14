@@ -548,6 +548,14 @@ function profileForm(existing) {
 
 $('#new').onclick = startNew;
 $('#refresh').onclick = event => void busy(event.currentTarget, refresh);
+$('#quit').onclick = event => void busy(event.currentTarget, async () => {
+  if (!await confirmAction('Quit FolderDrop?', 'This stops all active sharing. Your deliveries and access profiles are saved.', 'Quit FolderDrop')) return;
+  await call('quit');
+  clearInterval(timer);
+  for (const button of $$('.sidebar button')) button.disabled = true;
+  main.innerHTML = '<div class="empty"><h1 tabindex="-1">FolderDrop has quit</h1><p>Open FolderDrop again to start a new workspace session.</p></div>';
+  $('h1', main).focus();
+});
 $('#diagnostics').onclick = event => void busy(event.currentTarget, async () => {
   const info = await call('diagnostics');
   modal('Diagnostics', `<dl class="diagnostics"><dt>Runtime</dt><dd>${e(info.node)} · ${e(info.platform)} ${e(info.architecture)}</dd>
@@ -569,5 +577,5 @@ try {
 } catch (error) {
   main.setAttribute('aria-busy', 'false');
   main.innerHTML = `<div class="empty locked-admin">${icon('lock')}<h1>Open the local workspace</h1><p>${e(error.message)}</p><code>folderdrop --no-open</code></div>`;
-  for (const id of ['new', 'refresh', 'diagnostics']) $(`#${id}`).disabled = true;
+  for (const id of ['new', 'refresh', 'diagnostics', 'quit']) $(`#${id}`).disabled = true;
 }

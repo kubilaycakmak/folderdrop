@@ -87,7 +87,7 @@
   .nav-delivery[aria-current] { background: #e2eadc; border-color: #d1decc; }
   .nav-delivery:hover { background: #e5ebe0; }
   .nav-folder { display: grid; place-items: center; width: 1.95rem; height: 1.95rem; border-radius: .4rem; background: var(--surface); color: var(--accent); }
-  .side-bottom { justify-content: flex-start; margin-top: auto; }
+  .side-bottom { display: grid; justify-items: start; margin-top: auto; }
   .main { min-width: 0; padding: 3rem clamp(1rem, 4.5vw, 4.5rem); }
   .main-inner { max-width: 980px; margin: 0 auto; }
   .page-heading { display: grid; gap: .65rem; margin-bottom: 1.55rem; }
@@ -265,7 +265,7 @@
     .sidebar > .wide { width: auto; }
     .sidebar nav { grid-column: 1 / -1; display: flex; overflow: auto; margin: 0; }
     .nav-delivery { width: auto; min-width: 8rem; max-width: 13rem; }
-    .sidebar .side-bottom { grid-column: 1 / -1; justify-self: start; min-height: 2rem; }
+    .sidebar .side-bottom { display: flex; flex-wrap: wrap; grid-column: 1 / -1; justify-self: start; min-height: 2rem; }
     .main { padding-inline: .8rem; }
     .scan-box, .form-grid { grid-template-columns: 1fr; }
     .scan-box button { justify-self: start; }

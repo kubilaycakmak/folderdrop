@@ -104,6 +104,9 @@ install('administrator can curate, preview, share, and revoke a restricted recip
     expect(f.app.inspect(shareId).revoked).toBe(true);
     expect(f.app.network.status(shareId).addresses).toEqual([]);
     await expect(receiver.getByRole('heading', { name: 'Delivery unavailable' })).toBeVisible({ timeout: 7000 });
+    await page.getByRole('button', { name: 'Quit FolderDrop', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Quit FolderDrop' }).click();
+    await expect(page.getByRole('heading', { name: 'FolderDrop has quit' })).toBeVisible();
   } finally { await recipient.close(); }
 });
 
