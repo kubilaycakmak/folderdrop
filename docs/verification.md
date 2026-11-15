@@ -18,6 +18,8 @@ Run the release checks locally on Windows, macOS and Linux with Node 22.16.0 and
 | --- | --- |
 | Windows x64, Node 22.16.0 and 26.13.0 | Integration tests, Chromium journeys, build, and installed tarball smoke test |
 | Ubuntu 24.04 x64 on WSL2, Node 24.22.1 | Integration tests, Chromium journeys, build, and installed tarball smoke test |
+| Native macOS 27.0.1 arm64, Node 24.22.1 | At `4a6aa6b`, 23 integration tests, 4 Chromium journeys, 4 WebKit journeys, production audit, clean tarball install, and the extracted desktop launcher passed. |
+| Native macOS 27.0.1 arm64, Node 22.16.0 | At `4a6aa6b`, all 23 integration tests passed with the minimum supported Node version. |
 | Initial release candidate across Windows, Linux, and macOS | All six OS and Node combinations passed. |
 | Cloudflare Quick Tunnel | Windows x64 provider verified. Independent network probes in Germany and Finland received HTTP 200 from the live demo origin. Two separate Chromium contexts using the public URL confirmed unauthenticated access returned 401, first redemption returned 200, and reuse returned 410. After teardown Cloudflare returned 530 and no demo connector process remained. |
 | HTTPS reverse proxy | Loopback TLS proxy, Secure cookie, recipient-only origin and resumed access after restart verified. |
