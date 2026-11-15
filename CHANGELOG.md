@@ -13,5 +13,7 @@
 - Make the phone receiver selectable in the sharing workspace and add a browser link on encrypted delivery pages.
 - Identify the running build in both interfaces, default Cloudflare sharing to the project web receiver in the workspace, and let phone users check the connection before redeeming a code.
 - Refresh open link and QR dialogs when a tunnel reconnects, while preserving newly issued credentials.
+- Check the entered encryption key and browser ZIP budget before consuming an encrypted access code.
+- Offer the original download when a browser reports codec support but the media preview never loads.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
 - Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.

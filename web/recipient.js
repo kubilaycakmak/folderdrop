@@ -261,12 +261,27 @@ async function preview(file) {
       const result = await api(endpoint(`media-info/${file.id}`), undefined, { signal: controller.signal });
       if (!player.canPlayType(result.mime)) return fallback('This browser does not support the media format or codec.');
     } catch (error) { return fallback(error.message); }
+    if (controller.signal.aborted) return;
     player.controls = true;
     player.preload = 'metadata';
-    player.addEventListener('error', () => fallback('The browser could not play this codec or the source became unavailable.'), { once: true });
+    const loading = document.createElement('p');
+    loading.className = 'muted';
+    loading.setAttribute('role', 'status');
+    loading.textContent = 'Loading media preview…';
+    const release = () => {
+      clearTimeout(timeout);
+      player.removeEventListener('error', playbackError);
+      player.removeAttribute('src');
+      player.load();
+    };
+    const unavailable = message => { release(); fallback(message); };
+    const playbackError = () => unavailable('The browser could not play this codec or the source became unavailable.');
+    const timeout = setTimeout(() => unavailable('The media preview did not load. Try again or download the original if available.'), 8000);
+    player.addEventListener('error', playbackError, { once: true });
+    player.addEventListener('loadedmetadata', () => { clearTimeout(timeout); loading.remove(); }, { once: true });
+    controller.signal.addEventListener('abort', release, { once: true });
+    area.replaceChildren(loading, player);
     player.src = endpoint(`media/${file.id}`);
-    dialog.addEventListener('close', () => { player.removeAttribute('src'); player.load(); }, { once: true });
-    area.replaceChildren(player);
     return;
   }
   let page = 1;

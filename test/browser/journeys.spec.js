@@ -181,8 +181,14 @@ install('recipient gallery, list, breadcrumbs, safe previews, codec fallback and
   await page.keyboard.press('Escape');
   await page.getByRole('searchbox').fill('Palette motion');
   await page.getByRole('button', { name: 'Palette motion.webm', exact: true }).click();
-  await expect(page.locator('dialog video')).toBeVisible();
-  await expect.poll(() => page.locator('dialog video').evaluate(video => video.readyState)).toBeGreaterThanOrEqual(1);
+  const video = page.locator('dialog video');
+  const fallback = page.getByRole('heading', { name: 'Preview unavailable' });
+  await expect.poll(async () => {
+    if (await fallback.isVisible()) return 'fallback';
+    if (await video.count() && await video.evaluate(player => player.readyState >= 1)) return 'playing';
+    return 'loading';
+  }, { timeout: 15000 }).not.toBe('loading');
+  if (await fallback.isVisible()) await expect(page.getByRole('button', { name: 'Download original', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('searchbox').fill('Ambient');
   await page.evaluate(() => { HTMLMediaElement.prototype.canPlayType = () => ''; });

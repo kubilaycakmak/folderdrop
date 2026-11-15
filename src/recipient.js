@@ -3,7 +3,7 @@ import { cookie, setCookie, token } from './security.js';
 import { check } from './errors.js';
 import { SESSION_AGE } from './deliveries.js';
 import { format } from './previews.js';
-import { sendArchive, sendItem } from './transfers.js';
+import { checkBrowserArchive, sendArchive, sendItem } from './transfers.js';
 import { Encrypter } from 'age-encryption';
 import { webReceiverLink } from './network.js';
 
@@ -145,11 +145,25 @@ export function recipientHandler(deliveries, uploads) {
         if (req.method === 'GET' && !tail) return await encryptedLanding(res, config, `https://${req.headers.host}`, `/s/${id}/${recipientId}`);
         if ((tail === 'redeem' || tail === 'encrypted') && encryptedOrigin(req, res, tail, config)) return;
         if (req.method === 'POST' && tail === 'redeem') {
-          if (req.headers.origin && req.headers.origin === config.receiverOrigin) {
+          const browser = req.headers.origin && req.headers.origin === config.receiverOrigin;
+          if (browser) {
             check(req.headers['x-folderdrop-action'] === '1', 403, 'This browser receiver is not allowed.');
           } else origin(req, config.origins);
           const input = await body(req, 4096);
-          const secret = await deliveries.redeem(id, recipientId, input.code);
+          const connected = () => check(!res.destroyed, 408, 'The receiving window disconnected.');
+          const secret = await deliveries.redeem(id, recipientId, input.code, async ({ share, recipient }) => {
+            connected();
+            check(recipient.download, 403, 'The sender disabled downloads.', 'permission_denied');
+            if (input.recipientKey !== undefined) {
+              check(input.recipientKey === recipient.encryption, 422, 'The decryption key does not match this delivery.', 'decryption_key_mismatch');
+            }
+            if (browser) {
+              const context = deliveries.selection(share, recipient);
+              check(context.items.length, 404, 'There are no files available for this recipient.');
+              await checkBrowserArchive(deliveries, context, connected);
+              connected();
+            }
+          });
           return json(res, { session: secret });
         }
         if (req.method === 'GET' && tail === 'encrypted') {

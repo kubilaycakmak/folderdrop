@@ -5,8 +5,9 @@ import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { Decrypter, generateIdentity } from 'age-encryption';
+import { Decrypter, generateIdentity, identityToRecipient } from 'age-encryption';
 import { recipientHandler } from '../src/recipient.js';
+import { BROWSER_ARCHIVE_LIMIT } from '../src/receiving-limits.js';
 import { token } from '../src/security.js';
 import { fixture, draft, sharing, send, zipContents } from './helpers.js';
 
@@ -108,6 +109,7 @@ test('the local receiver keeps the key off the network, retries in one session a
   assert.equal((await send(endpoint, payload, { headers: { ...headers, Origin: 'https://other.example' } })).status, 403);
   const bad = await send(endpoint, { ...payload, decryptionKey: await generateIdentity() }, { headers });
   assert.equal(bad.status, 422);
+  assert.equal(f.app.inspect(share.id).recipients.find(item => item.id === issued.id).redeemed, null);
   assert.deepEqual(await fs.readdir(f.inbox), []);
   corrupt = true;
   assert.equal((await send(endpoint, payload, { headers })).status, 422);
@@ -122,4 +124,29 @@ test('the local receiver keeps the key off the network, retries in one session a
   assert.equal(f.app.inspect(share.id).recipients.find(item => item.id === issued.id).count, 1);
   assert.ok(captured.every(item => !item.includes(issued.decryptionKey)));
   assert.ok(captured.some(item => item.includes(issued.code)));
+});
+
+test('an oversized browser archive does not consume the code needed by the desktop receiver', async t => {
+  const f = await fixture(t);
+  const share = await draft(f);
+  const issued = await sharing(f, share, { encrypted: true, items: [share.items[0].id] });
+  await fs.truncate(path.join(f.source, 'notes', 'hello.txt'), BROWSER_ARCHIVE_LIMIT);
+  const receiverOrigin = 'https://receiver.example';
+  const handler = recipientHandler(f.app.deliveries, f.app.uploads);
+  const server = http.createServer((req, res) => handler(req, res, {
+    share: share.id, origins: new Set([`http://${req.headers.host}`]), encryptedOnly: true, secure: true, receiverOrigin
+  }));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const url = `http://127.0.0.1:${server.address().port}/s/${share.id}/${issued.id}/redeem`;
+  const recipientKey = await identityToRecipient(issued.decryptionKey);
+  const denied = await send(url, { code: issued.code, recipientKey }, { headers: { Origin: receiverOrigin } });
+  assert.equal(denied.status, 413);
+  assert.equal((await denied.json()).code, 'browser_archive_limit');
+  assert.equal(f.app.inspect(share.id).recipients.find(item => item.id === issued.id).redeemed, null);
+  const desktop = await send(url, { code: issued.code, recipientKey });
+  assert.equal(desktop.status, 200);
+  assert.match((await desktop.json()).session, /^[\w-]{43}$/);
+  assert.equal((await send(url, { code: issued.code, recipientKey })).status, 410);
 });

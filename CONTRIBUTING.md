@@ -9,6 +9,7 @@ Use Node.js 22.16 or newer and install locked dependencies with `npm ci`. Run `n
 | `npx playwright install chromium` | Install the Chromium browser used by the journeys. Add `--with-deps` on Linux when system libraries are needed. |
 | `npm run test:browser` | Exercise administration and receipt in real Chromium browser contexts. |
 | `npm run verify:package` | Pack, audit the file list, install production dependencies from the tarball, and smoke-test the installed runtime. |
+| `npm run verify:release` | Run the build, integration tests, Chromium journeys, production audit and installed tarball checks from one command. |
 | `npm audit --omit=dev` | Check the runtime dependency tree with the npm advisory service. |
 
 Run verification locally and record the operating system and Node version in the pull request. For releases, verify Windows, macOS, and Linux using the minimum Node version and Node 24. Keep tests and demos on loopback unless you have been asked to open a real listener to another network. See [verification](docs/verification.md).

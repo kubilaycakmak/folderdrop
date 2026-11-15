@@ -4,15 +4,13 @@ Run the checks below in a checkout on the target operating system.
 
 ```sh
 npm ci
-npm run build
-npm test
 npx playwright install chromium
-npm run test:browser
-npm audit --omit=dev
-npm run verify:package
+npm run verify:release
 ```
 
-On Linux, use `npx playwright install --with-deps chromium` if browser system libraries are missing. Set `FOLDERDROP_KEEP_TARBALL=1` when running package verification to keep the tested release archive in the checkout. The verifier prints its exact contents and SHA-256 digest. From a production installation in a fresh directory and a different working directory it exercises the npm executable, CLI, HTTP, image/PDF/video previews, snapshots, and a genuine MCP handshake.
+The release command runs the build, integration tests, Chromium journeys, a production dependency audit, and the installed tarball check. On Linux, use `npx playwright install --with-deps chromium` if browser system libraries are missing. To exercise the phone flow in all supported test engines, run `npx playwright install chromium firefox webkit`, then `npm run test:browser -- --browser=all mobile-receiver.spec.js`.
+
+Set `FOLDERDROP_KEEP_TARBALL=1` when running package verification to keep the tested release archive in the checkout. The verifier prints its exact contents and SHA-256 digest. From a production installation in a fresh directory and a different working directory it exercises the npm executable, CLI, HTTP, image/PDF/video previews, snapshots, and a genuine MCP handshake.
 
 Run the release checks locally on Windows, macOS and Linux with Node 22.16.0 and Node 24. Include the platform and Node version in the review record. Run `npm run build:desktop` on each desktop package target. The initial repository revision passed all six platform and Node combinations before verification moved to local runs.
 
