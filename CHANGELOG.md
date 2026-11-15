@@ -16,4 +16,5 @@
 - Check the entered encryption key and browser ZIP budget before consuming an encrypted access code.
 - Offer the original download when a browser reports codec support but the media preview never loads.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
+- Add an explicit Windows publisher-signing build and verify desktop archives before copying them to their final output paths.
 - Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.
