@@ -88,6 +88,7 @@
   .nav-delivery:hover { background: #e5ebe0; }
   .nav-folder { display: grid; place-items: center; width: 1.95rem; height: 1.95rem; border-radius: .4rem; background: var(--surface); color: var(--accent); }
   .side-bottom { display: grid; justify-items: start; margin-top: auto; }
+  .workspace-license { padding: .4rem .85rem 0; }
   #receive-encrypted { margin-top: .45rem; }
   .main { min-width: 0; padding: 3rem clamp(1rem, 4.5vw, 4.5rem); }
   .main-inner { max-width: 980px; margin: 0 auto; }

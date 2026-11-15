@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — Unreleased
+## 1.0.0
 
 - Add the loopback workspace, curated recipient gallery and list, and clipboard and QR tools for private links.
 - Add transactional, single-redemption access codes with independent recipient permissions and session invalidation.
@@ -17,4 +17,5 @@
 - Offer the original download when a browser reports codec support but the media preview never loads.
 - Build self-contained desktop preview packages for Windows, macOS, and Debian/Ubuntu.
 - Add an explicit Windows publisher-signing build and verify desktop archives before copying them to their final output paths.
+- Document unsigned desktop downloads and the MIT warranty and liability terms in the workspace and release documentation.
 - Add CLI, stdio MCP, reproducible fixtures, browser journeys, local cross-platform checks, and production tarball verification.

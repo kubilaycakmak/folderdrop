@@ -2,7 +2,7 @@
 
 FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP. Recipients can use the desktop app or an independently hosted [web receiver for phones](docs/encryption.md#set-up-the-web-receiver-for-phones).
 
-[Try FolderDrop](#try-it) · [Desktop packages](docs/desktop.md) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
+[Download FolderDrop](https://github.com/kubilaycakmak/folderdrop/releases/latest) · [Try from source](#from-source) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
 
 ![FolderDrop recipient gallery showing artwork and a lookbook](docs/screenshots/recipient-gallery.png)
 
@@ -10,7 +10,7 @@ FolderDrop is an open-source, self-hosted file sharing app. Share selected files
 
 ### Desktop
 
-The Windows, macOS and Linux desktop packages bundle Node.js and open the local FolderDrop workspace in your default browser. See the [desktop package guide](docs/desktop.md) for supported platforms and the status of downloadable builds.
+Download the Windows x64, macOS Apple Silicon, or Debian/Ubuntu x64 package from [GitHub Releases](https://github.com/kubilaycakmak/folderdrop/releases/latest). Each desktop package bundles Node.js and opens the workspace in your default browser. The Windows and Mac launchers are unsigned. macOS notarization is absent. OS policy may warn or block them. See the [desktop package guide](docs/desktop.md) for setup and checksum verification.
 
 ### From source
 
@@ -56,7 +56,7 @@ folderdrop links DELIVERY_ID RECIPIENT_ID
 folderdrop stop DELIVERY_ID
 ```
 
-In a checkout, run the same commands with `node bin/folderdrop.js <command>`. The project uses `@kubilaycakmak/folderdrop` as its package name. The package is currently unpublished. Verify a local tarball with `npm run verify:package`.
+In a checkout, run the same commands with `node bin/folderdrop.js <command>`. The project uses `@kubilaycakmak/folderdrop` as its package name. Verify a local tarball with `npm run verify:package`.
 
 | Capability | Behavior |
 | --- | --- |
@@ -78,3 +78,7 @@ In a checkout, run the same commands with `node bin/folderdrop.js <command>`. Th
 - [Demo and screenshots](docs/demo.md)
 - [Verification and platform results](docs/verification.md)
 - [Contributing](CONTRIBUTING.md)
+
+## License and responsibility
+
+FolderDrop is free, open-source software under the [MIT License](LICENSE). It comes as is, without warranty. You use it at your own risk. The MIT License limits the liability of the authors and copyright holders to the extent permitted by applicable law.

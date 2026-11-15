@@ -1,5 +1,7 @@
 # Security and privacy
 
+FolderDrop comes as is, without warranty. Use it at your own risk. The [MIT License](LICENSE) sets out the limits on the liability of the authors and copyright holders.
+
 ## Report a vulnerability
 
 Use [GitHub private vulnerability reporting](https://github.com/kubilaycakmak/folderdrop/security/advisories/new). Include the FolderDrop version, operating system, sharing mode, and the expected access boundary. Use disposable sample files and redact share links, access codes, session tokens, and local paths. Please keep reports about vulnerabilities in the private channel while a fix is prepared.

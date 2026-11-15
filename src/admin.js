@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { asset, body, fail, headers, json, origin } from './http.js';
 import { check } from './errors.js';
 import { cookie, digest, equal, setCookie, token } from './security.js';
@@ -44,6 +45,10 @@ export class Admin {
       if (req.method === 'GET' && assets) return await asset(res, assets[1]);
       if (req.method === 'GET' && url.pathname === '/') return await asset(res, 'admin.html', page =>
         page.replaceAll('@@BUILD@@', BUILD).replace('@@VERSION@@', VERSION));
+      if (req.method === 'GET' && url.pathname === '/license') {
+        const license = await readFile(new URL('../LICENSE', import.meta.url));
+        return res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': license.length }).end(license);
+      }
       if (req.method !== 'GET' && req.method !== 'HEAD') origin(req, allowed);
       if (req.method === 'POST' && url.pathname === '/bootstrap') {
         const input = await body(req, 4096);
