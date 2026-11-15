@@ -1,7 +1,7 @@
 {
   "name": "@kubilaycakmak/folderdrop",
-  "version": "1.0.0",
-  "description": "Open-source private file and folder sharing with one-time access codes, previews, and inbox uploads",
+  "version": "1.0.1",
+  "description": "Free, open-source private file sharing. Send files and folders from your computer with one-time access codes, encrypted ZIPs, and browser downloads.",
   "type": "module",
   "license": "MIT",
   "author": "FolderDrop contributors",
@@ -62,10 +62,15 @@
     "yauzl": "3.3.1"
   },
   "keywords": [
+    "private file sharing",
+    "private-file-sharing",
     "file-sharing",
     "folder-sharing",
-    "private-file-sharing",
+    "encrypted-file-sharing",
+    "private-file-transfer",
+    "file-transfer",
     "one-time-link",
+    "one-time-download",
     "cloudflare-tunnel",
     "delivery",
     "cli",

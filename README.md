@@ -1,16 +1,20 @@
-# FolderDrop · Private File and Folder Sharing
+# FolderDrop · Private File Sharing
 
-FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP. Recipients can use the desktop app or an independently hosted [web receiver for phones](docs/encryption.md#set-up-the-web-receiver-for-phones).
+[Download for Windows (x64)](https://github.com/kubilaycakmak/folderdrop/releases/download/v1.0.0/FolderDrop-1.0.0-windows-x64.zip) · [Download for macOS (Apple Silicon)](https://github.com/kubilaycakmak/folderdrop/releases/download/v1.0.0/FolderDrop-1.0.0-macos-arm64.zip) · [Download for Linux (Debian/Ubuntu x64)](https://github.com/kubilaycakmak/folderdrop/releases/download/v1.0.0/FolderDrop-1.0.0-linux-x64.deb)
 
-[Download FolderDrop](https://github.com/kubilaycakmak/folderdrop/releases/latest) · [Run with npm](#npm) · [Try from source](#from-source) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
+Desktop v1.0.0 · [SHA-256 checksums](https://github.com/kubilaycakmak/folderdrop/releases/download/v1.0.0/SHA256SUMS.txt) · [All release files](https://github.com/kubilaycakmak/folderdrop/releases/tag/v1.0.0)
 
-![FolderDrop recipient gallery showing artwork and a lookbook](docs/screenshots/recipient-gallery.png)
+FolderDrop is a free, open-source private file sharing app for Windows, macOS, and Linux. Send selected files and folders directly from your computer with a private link and a one-time access code. Recipients can open deliveries in a browser without an account. Cloudflare deliveries use end-to-end encrypted ZIPs. Local and self-hosted browser deliveries also support file previews and invited uploads.
+
+[Run with npm](#npm) · [Try from source](#from-source) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
+
+![FolderDrop private file sharing page with image previews and download controls](https://raw.githubusercontent.com/kubilaycakmak/folderdrop/v1.0.0/docs/screenshots/recipient-gallery.png)
 
 ## Try it
 
 ### Desktop
 
-Download the Windows x64, macOS Apple Silicon, or Debian/Ubuntu x64 package from [GitHub Releases](https://github.com/kubilaycakmak/folderdrop/releases/latest). Each desktop package bundles Node.js and opens the workspace in your default browser. The Windows and Mac launchers are unsigned. macOS notarization is absent. OS policy may warn or block them. See the [desktop package guide](docs/desktop.md) for setup and checksum verification.
+Each desktop package bundles Node.js and opens the workspace in your default browser. The Windows and Mac launchers are unsigned. macOS notarization is absent. OS policy may warn or block them. See the [desktop package guide](docs/desktop.md) for setup and checksum verification.
 
 ### npm
 
@@ -47,7 +51,7 @@ The first successful redemption consumes the code and opens a browser session. T
 | Cloudflare Quick Tunnel | Encrypted ZIP required. Cloudflare sees access codes, session tokens, sizes and timing. The decryption key is sent separately through a trusted channel. |
 | Self-hosted HTTPS | The HTTPS reverse proxy you configure handles the traffic. Select an encrypted ZIP for a recipient when the proxy should only see ciphertext. |
 
-FolderDrop limits access to selected files and recipient permissions. It leaves original files on disk. See [encrypted delivery](docs/encryption.md) for sending and receiving keys, and [the security policy](SECURITY.md) for limitations and reporting.
+FolderDrop limits access to selected files and recipient permissions. It leaves original files on disk. Encrypted deliveries can use a [web receiver for phones](docs/encryption.md#set-up-the-web-receiver-for-phones). See [encrypted delivery](docs/encryption.md) for sending and receiving keys, and [the security policy](SECURITY.md) for limitations and reporting.
 
 ## Commands
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Make desktop downloads for Windows, macOS, and Linux available directly from the top of the README.
+- Update npm search metadata for private file sharing and document the hosted receiver's role in encrypted transfers.
+
 ## 1.0.0
 
 - Add the loopback workspace, curated recipient gallery and list, and clipboard and QR tools for private links.
