@@ -2,7 +2,7 @@
 
 FolderDrop is an open-source, self-hosted file sharing app. Share selected files and folders from your own computer using a private link and a one-time access code. Browser deliveries support previews, downloads and invited uploads. Cloudflare deliveries encrypt the selected files as a ZIP. Recipients can use the desktop app or an independently hosted [web receiver for phones](docs/encryption.md#set-up-the-web-receiver-for-phones).
 
-[Download FolderDrop](https://github.com/kubilaycakmak/folderdrop/releases/latest) · [Try from source](#from-source) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
+[Download FolderDrop](https://github.com/kubilaycakmak/folderdrop/releases/latest) · [Run with npm](#npm) · [Try from source](#from-source) · [Network and privacy](#network-and-privacy) · [Report a bug](https://github.com/kubilaycakmak/folderdrop/issues)
 
 ![FolderDrop recipient gallery showing artwork and a lookbook](docs/screenshots/recipient-gallery.png)
 
@@ -11,6 +11,14 @@ FolderDrop is an open-source, self-hosted file sharing app. Share selected files
 ### Desktop
 
 Download the Windows x64, macOS Apple Silicon, or Debian/Ubuntu x64 package from [GitHub Releases](https://github.com/kubilaycakmak/folderdrop/releases/latest). Each desktop package bundles Node.js and opens the workspace in your default browser. The Windows and Mac launchers are unsigned. macOS notarization is absent. OS policy may warn or block them. See the [desktop package guide](docs/desktop.md) for setup and checksum verification.
+
+### npm
+
+With Node.js 22.16 or newer, run [FolderDrop on npm](https://www.npmjs.com/package/@kubilaycakmak/folderdrop) to open the local workspace:
+
+```sh
+npx @kubilaycakmak/folderdrop@latest
+```
 
 ### From source
 
