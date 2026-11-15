@@ -7,6 +7,7 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const manifests = ['package.json', 'package-lock.json'];
@@ -26,17 +27,41 @@ if (!archiveSuffix || !process.env.npm_execpath) throw new Error('Run npm run bu
 
 const windows = process.platform === 'win32';
 const mac = process.platform === 'darwin';
+const { values } = parseArgs({ options: { signed: { type: 'boolean' } } });
+const signing = values.signed ? windowsSigning() : null;
 const npmCli = process.env.npm_execpath;
 const node = windows ? 'node.exe' : 'node';
+const out = path.join(root, 'dist');
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'folderdrop-desktop-'));
 const stage = path.join(temporary, 'build');
-const out = path.join(root, 'dist');
 const bundle = mac ? path.join(stage, 'FolderDrop.app') : path.join(stage, 'FolderDrop');
 const resources = mac ? path.join(bundle, 'Contents', 'Resources') : windows ? bundle : path.join(bundle, 'usr', 'lib', 'folderdrop');
 const app = path.join(resources, 'app');
 const runtime = path.join(resources, 'runtime');
 const launcher = windows ? path.join(resources, 'FolderDrop.exe') : mac ? path.join(bundle, 'Contents', 'MacOS', 'FolderDrop') : path.join(resources, 'FolderDrop');
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit', windowsHide: true, ...options });
+
+function windowsSigning() {
+  if (!windows) throw new Error('The --signed desktop build uses Windows SignTool and requires Windows.');
+  const thumbprint = process.env.FOLDERDROP_SIGNING_THUMBPRINT;
+  if (!/^[a-f\d]{40}$/i.test(thumbprint ?? '')) {
+    throw new Error('Set FOLDERDROP_SIGNING_THUMBPRINT to the 40-character thumbprint of your code-signing certificate.');
+  }
+  let timestamp;
+  try { timestamp = new URL(process.env.FOLDERDROP_SIGNING_TIMESTAMP_URL ?? 'https://timestamp.digicert.com'); } catch {}
+  if (!['http:', 'https:'].includes(timestamp?.protocol) || timestamp.username || timestamp.password || timestamp.hash) {
+    throw new Error('Use an HTTP or HTTPS RFC 3161 timestamp service without URL credentials.');
+  }
+  const tool = process.env.FOLDERDROP_SIGNTOOL ?? 'signtool.exe';
+  if (process.env.FOLDERDROP_SIGNTOOL && !path.isAbsolute(tool)) throw new Error('Use an absolute path for FOLDERDROP_SIGNTOOL.');
+  const available = spawnSync(tool, ['/?'], { cwd: os.tmpdir(), stdio: 'ignore', windowsHide: true, timeout: 5000 });
+  if (available.error) throw new Error('Windows SignTool could not run. Install the Windows SDK and set FOLDERDROP_SIGNTOOL to signtool.exe.');
+  return { tool, thumbprint, timestamp: timestamp.href };
+}
+
+function verifyLauncherSignature(executable) {
+  if (signing) run(signing.tool, ['verify', '/pa', '/all', '/tw', executable]);
+}
 
 async function installRuntime() {
   const filename = `node-v${runtimeVersion}-${archiveSuffix}`;
@@ -111,16 +136,24 @@ Description: Private file and folder sharing with one-time access codes
 `);
 }
 
-async function makePackage() {
-  const filename = `FolderDrop-${version}-${target}.${windows || mac ? 'zip' : 'deb'}`;
-  const archive = path.join(out, filename);
+async function makePackage(staging) {
+  const filename = `FolderDrop-${version}-${target}${signing ? '-signed' : ''}.${windows || mac ? 'zip' : 'deb'}`;
+  const archive = path.join(staging, filename);
   if (windows) run('tar', ['-a', '-cf', archive, '-C', stage, path.basename(bundle)]);
   else if (mac) run('ditto', ['-c', '-k', '--keepParent', bundle, archive]);
   else run('dpkg-deb', ['--root-owner-group', '--build', bundle, archive]);
+  return archive;
+}
+
+async function finishPackage(archive) {
+  const filename = path.basename(archive);
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(archive)) hash.update(chunk);
   await fs.writeFile(`${archive}.sha256`, `${hash.digest('hex')}  ${filename}\n`);
-  return archive;
+  const destination = path.join(out, filename);
+  await fs.rename(archive, destination);
+  await fs.rename(`${archive}.sha256`, `${destination}.sha256`);
+  return destination;
 }
 
 async function smoke(archive) {
@@ -131,6 +164,7 @@ async function smoke(archive) {
   else if (mac) run('ditto', ['-x', '-k', archive, extracted]);
   else run('dpkg-deb', ['--extract', archive, extracted]);
   const launcherPath = path.join(extracted, path.relative(windows || mac ? stage : bundle, launcher));
+  verifyLauncherSignature(launcherPath);
   const bundledNode = path.join(extracted, path.relative(windows || mac ? stage : bundle, runtime), node);
   const entry = path.join(extracted, path.relative(windows || mac ? stage : bundle, app), 'bin', 'folderdrop.js');
   const env = { ...process.env, FOLDERDROP_DATA_DIR: state };
@@ -184,14 +218,21 @@ async function smoke(archive) {
 
 try {
   await fs.mkdir(app, { recursive: true });
-  await fs.mkdir(out, { recursive: true });
   await installRuntime();
   for (const name of [...manifests, ...production]) await fs.cp(path.join(root, name), path.join(app, name), { recursive: true });
   run(path.join(runtime, node), [npmCli, 'ci', '--omit=dev', '--include=optional', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: app });
   await writeLauncher();
-  const archive = await makePackage();
-  await smoke(archive);
-  console.log(archive);
+  if (signing) {
+    run(signing.tool, ['sign', '/sha1', signing.thumbprint, '/fd', 'SHA256', '/tr', signing.timestamp,
+      '/td', 'SHA256', '/d', 'FolderDrop', launcher]);
+  }
+  await fs.mkdir(out, { recursive: true });
+  const staging = await fs.mkdtemp(path.join(out, '.folderdrop-desktop-'));
+  try {
+    const archive = await makePackage(staging);
+    await smoke(archive);
+    console.log(await finishPackage(archive));
+  } finally { await fs.rm(staging, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 }); }
 } finally {
   await fs.rm(temporary, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
 }
