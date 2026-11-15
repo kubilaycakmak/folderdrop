@@ -47,6 +47,10 @@ try {
   const admin = new URL(launch.url);
   const shell = await fetch(admin.origin);
   assert.match(await shell.text(), /FolderDrop/);
+  const license = await fetch(`${admin.origin}/license`);
+  assert.equal(license.status, 200);
+  assert.match(license.headers.get('content-type'), /^text\/plain/);
+  assert.match(await license.text(), /WITHOUT WARRANTY/);
   assert.equal((await fetch(`${admin.origin}/assets/admin.js`)).status, 200);
   const share = await run('create', source);
   await run('snapshot', share.id);
